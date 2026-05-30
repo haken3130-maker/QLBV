@@ -21,19 +21,13 @@ class SpringBootDatabaseService implements IDatabaseService {
     if (defineUrl.isNotEmpty) {
       return defineUrl;
     }
-    if (kIsWeb) {
-      return 'http://localhost:8080';
-    } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8080';
-    } else {
-      return 'http://localhost:8080';
-    }
+    return 'https://qlbv-9542.onrender.com';
   }
 
   final Dio _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 30),
   ));
 
   static String? _token;
