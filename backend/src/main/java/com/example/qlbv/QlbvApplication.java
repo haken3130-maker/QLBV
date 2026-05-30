@@ -12,5 +12,3 @@ public class QlbvApplication {
         SpringApplication.run(QlbvApplication.class, args);
     }
 }
-
-}
