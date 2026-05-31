@@ -748,6 +748,7 @@ class CreateJobDialogState extends State<CreateJobDialog> {
   final _quantityController = TextEditingController();
   final _priceController = TextEditingController();
   final List<String> _selectedParticipants = [];
+  String _employeeSearchQuery = '';
 
   bool _isSaving = false;
 
@@ -1064,51 +1065,139 @@ class CreateJobDialogState extends State<CreateJobDialog> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      
-                      // Active employees checklist
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        decoration: InputDecoration(
+                          hintText: 'Tìm kiếm tên hoặc số điện thoại',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: _employeeSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded),
+                                  onPressed: () => setState(() => _employeeSearchQuery = ''),
+                                )
+                              : null,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
+                        onChanged: (value) => setState(() => _employeeSearchQuery = value.trim()),
+                      ),
+                      const SizedBox(height: 12),
+                      if (activeEmployees.isNotEmpty)
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedParticipants.clear();
+                                  _selectedParticipants.addAll(activeEmployees.map((e) => e.id));
+                                });
+                              },
+                              child: const Text('Chọn tất cả'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() => _selectedParticipants.clear());
+                              },
+                              child: const Text('Bỏ chọn'),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade200),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: activeEmployees.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: Text('Không có nhân viên hoạt động')),
-                              )
-                            : ListView.builder(
-                                shrinkWrap: true,
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: activeEmployees.length,
-                                itemBuilder: (context, idx) {
-                                  final emp = activeEmployees[idx];
-                                  final isChecked = _selectedParticipants.contains(emp.id);
-                                  
-                                  return CheckboxListTile(
-                                    title: Text(
-                                      emp.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        constraints: const BoxConstraints(
+                          minHeight: 260,
+                          maxHeight: 360,
+                        ),
+                        child: Column(
+                          children: [
+                            if (_selectedParticipants.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxHeight: 90),
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: _selectedParticipants.map((id) {
+                                        final emp = activeEmployees.firstWhere(
+                                          (e) => e.id == id,
+                                          orElse: () => Employee(id: id, name: 'Không rõ', phone: '', joinDate: DateTime.now(), status: ''),
+                                        );
+                                        final shortId = emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id;
+                                        return InputChip(
+                                          label: Text(
+                                            '${emp.name} • ${emp.phone.isNotEmpty ? emp.phone : shortId}',
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                          onDeleted: () {
+                                            setState(() => _selectedParticipants.remove(id));
+                                          },
+                                          deleteIconColor: const Color(0xFF6200EE),
+                                          backgroundColor: const Color(0xFFE8EAF6),
+                                        );
+                                      }).toList(),
                                     ),
-                                    subtitle: Text(emp.phone, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                    value: isChecked,
-                                    onChanged: (checked) {
-                                      setState(() {
-                                        if (checked == true) {
-                                          _selectedParticipants.add(emp.id);
-                                        } else {
-                                          _selectedParticipants.remove(emp.id);
-                                        }
-                                      });
-                                    },
-                                    activeColor: const Color(0xFF6200EE),
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                  );
-                                },
+                                  ),
+                                ),
                               ),
+                            Expanded(
+                              child: Builder(builder: (context) {
+                                final filteredEmployees = activeEmployees.where((emp) {
+                                  final query = _employeeSearchQuery.toLowerCase();
+                                  return emp.name.toLowerCase().contains(query) || emp.phone.contains(query);
+                                }).toList();
+
+                                return filteredEmployees.isEmpty
+                                    ? Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Center(child: Text(_employeeSearchQuery.isEmpty ? 'Không có nhân viên hoạt động' : 'Không tìm thấy nhân viên phù hợp', style: const TextStyle(color: Colors.grey))),
+                                      )
+                                    : ListView.builder(
+                                        physics: const BouncingScrollPhysics(),
+                                        itemCount: filteredEmployees.length,
+                                        itemBuilder: (context, idx) {
+                                          final emp = filteredEmployees[idx];
+                                          final isChecked = _selectedParticipants.contains(emp.id);
+
+                                          final shortId = emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id;
+                                          return CheckboxListTile(
+                                            title: Text(
+                                              emp.name,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            subtitle: Text(
+                                              emp.phone.isNotEmpty
+                                                  ? 'SĐT: ${emp.phone} • Mã: $shortId'
+                                                  : 'Mã: $shortId',
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            ),
+                                            value: isChecked,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (checked == true) {
+                                                  _selectedParticipants.add(emp.id);
+                                                } else {
+                                                  _selectedParticipants.remove(emp.id);
+                                                }
+                                              });
+                                            },
+                                            activeColor: const Color(0xFF6200EE),
+                                            controlAffinity: ListTileControlAffinity.leading,
+                                            dense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                          );
+                                        },
+                                      );
+                              }),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

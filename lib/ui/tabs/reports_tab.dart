@@ -85,9 +85,7 @@ class _ReportsTabState extends State<ReportsTab> {
       workerEarnings[entry.employeeName] = (workerEarnings[entry.employeeName] ?? 0) + entry.amount;
     }
 
-    final summaryText = ZaloReportService.buildSummaryChunk(_dailyReportDate, totalJobs, totalVolume, totalAmount);
-    final jobChunks = ZaloReportService.buildJobsDetailChunks(jobsToday, entriesToday);
-    final earningsText = ZaloReportService.buildWorkerEarningsChunk(_dailyReportDate, workerEarnings);
+    final fullDailyReportText = ZaloReportService.buildFullDailyReport(_dailyReportDate, jobsToday, entriesToday, workerEarnings);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFC),
@@ -146,6 +144,23 @@ class _ReportsTabState extends State<ReportsTab> {
                 ),
               ),
               const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildStatItem('Công việc', totalJobs.toString()),
+                    _buildStatItem('Khối lượng', totalVolume.toStringAsFixed(1)),
+                    _buildStatItem('Doanh thu', currencyFormat.format(totalAmount)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               
               if (totalJobs == 0)
                 Center(
@@ -171,23 +186,18 @@ class _ReportsTabState extends State<ReportsTab> {
                 )
               else ...[
                 _buildTemplateCard(
-                  title: 'Phần 1: Tổng hợp chung',
-                  content: summaryText,
+                  title: 'Báo cáo ngày',
+                  subtitle: DateFormat('dd/MM/yyyy').format(_dailyReportDate),
+                  content: fullDailyReportText,
                   icon: Icons.analytics_outlined,
-                ),
-                
-                ...List.generate(jobChunks.length, (idx) {
-                  return _buildTemplateCard(
-                    title: 'Phần 2.${idx + 1}: Chi tiết công việc #${idx + 1}',
-                    content: jobChunks[idx],
-                    icon: Icons.inventory_2_outlined,
-                  );
-                }),
-                
-                _buildTemplateCard(
-                  title: 'Phần 3: Thu nhập nhân viên',
-                  content: earningsText,
-                  icon: Icons.groups_outlined,
+                  onPdf: () async {
+                    await PdfReportService.exportAndShareDailyPdf(
+                      date: _dailyReportDate,
+                      jobs: jobsToday,
+                      salaryEntries: entriesToday,
+                      workerEarnings: workerEarnings,
+                    );
+                  },
                 ),
               ],
             ],
@@ -197,50 +207,87 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
+  Widget _buildStatItem(String label, String value) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildTemplateCard({required String title, required String content, required IconData icon}) {
+  Widget _buildTemplateCard({required String title, String? subtitle, required String content, required IconData icon, VoidCallback? onPdf}) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(icon, size: 18, color: const Color(0xFF6200EE)),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50)),
-                  ),
-                ],
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, size: 20, color: const Color(0xFF4F46E5)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               Row(
                 children: [
                   Container(
-                    height: 32,
-                    width: 32,
+                    height: 38,
+                    width: 38,
                     decoration: BoxDecoration(
                       color: Colors.purple.shade50,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.copy_rounded, size: 15, color: Color(0xFF6200EE)),
+                      icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF4F46E5)),
                       tooltip: 'Sao chép',
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: content));
@@ -254,46 +301,65 @@ class _ReportsTabState extends State<ReportsTab> {
                       },
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      splashRadius: 16,
+                      splashRadius: 18,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Container(
-                    height: 32,
-                    width: 32,
+                    height: 38,
+                    width: 38,
                     decoration: BoxDecoration(
                       color: Colors.blue.shade50,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.share_rounded, size: 15, color: Colors.blue),
+                      icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF1D4ED8)),
                       tooltip: 'Gửi Zalo',
                       onPressed: () => ZaloReportService.shareChunk(content),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      splashRadius: 16,
+                      splashRadius: 18,
                     ),
                   ),
+                  if (onPdf != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      height: 38,
+                      width: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Colors.red),
+                        tooltip: 'Xuất PDF',
+                        onPressed: onPdf,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        splashRadius: 18,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFFF8F9FA),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Text(
+            child: SelectableText(
               content,
               style: const TextStyle(
-                fontFamily: 'monospace', 
-                fontSize: 12, 
-                height: 1.4,
-                color: Color(0xFF2C3E50),
+                fontFamily: 'monospace',
+                fontSize: 13,
+                height: 1.55,
+                color: Color(0xFF334155),
               ),
             ),
           ),

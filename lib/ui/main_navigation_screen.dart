@@ -79,24 +79,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
         actions: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.purple.shade100),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)),
             ),
             child: Text(
               user.role == 'admin' ? 'QTV' : 'Tổ trưởng',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.purple.shade700,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
             tooltip: 'Đăng xuất',
             onPressed: () => authProv.logout(),
           ),

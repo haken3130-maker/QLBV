@@ -15,30 +15,37 @@ class ZaloReportService {
 • Tổng doanh thu: ${_currencyFormat.format(totalAmount)}''';
   }
 
-  static List<String> buildJobsDetailChunks(List<Job> jobs, List<SalaryEntry> allEntries) {
-    final List<String> chunks = [];
-    
+  static String buildJobsDetailText(List<Job> jobs, List<SalaryEntry> allEntries) {
+    if (jobs.isEmpty) {
+      return 'Không có chi tiết công việc trong ngày.';
+    }
+
+    final buffer = StringBuffer();
     for (int i = 0; i < jobs.length; i++) {
       final job = jobs[i];
       final jobEntries = allEntries.where((e) => e.jobId == job.id).toList();
-      final shareAmount = jobEntries.isNotEmpty ? jobEntries.first.amount : 0;
-      final names = jobEntries.map((e) => e.employeeName).join(', ');
+      final validParticipants = job.participants.isNotEmpty ? job.participants.length : 1;
+      final shareAmount = job.totalAmount ~/ validParticipants;
+      final names = jobEntries.map((e) => e.employeeName).toSet().join(', ');
 
-      final text = '''📦 CHI TIẾT CÔNG VIỆC #${i + 1}
+      buffer.writeln('📦 CHI TIẾT CÔNG VIỆC #${i + 1}');
+      buffer.writeln();
+      buffer.writeln('• Sản phẩm: ${job.productName}');
+      buffer.writeln('• Số lượng: ${job.quantity}');
+      buffer.writeln('• Đơn giá: ${_currencyFormat.format(job.unitPrice)}');
+      buffer.writeln('• Tổng cộng: ${_currencyFormat.format(job.totalAmount)}');
+      buffer.writeln();
+      buffer.writeln('👥 Nhân viên tham gia (${job.participants.length} người):');
+      buffer.writeln(names.isNotEmpty ? names : 'Không có nhân viên');
+      buffer.writeln();
+      buffer.writeln('💵 Chia đều: ${_currencyFormat.format(shareAmount)}/người');
 
-• Sản phẩm: ${job.productName}
-• Số lượng: ${job.quantity}
-• Đơn giá: ${_currencyFormat.format(job.unitPrice)}
-• Tổng cộng: ${_currencyFormat.format(job.totalAmount)}
-
-👥 Nhân viên tham gia (${job.participants.length} người):
-$names
-
-💵 Chia đều: ${_currencyFormat.format(shareAmount)}/người''';
-      chunks.add(text);
+      if (i < jobs.length - 1) {
+        buffer.writeln();
+      }
     }
-    
-    return chunks;
+
+    return buffer.toString();
   }
 
   static String buildWorkerEarningsChunk(DateTime date, Map<String, int> workerEarnings) {
@@ -56,6 +63,24 @@ $names
     }
     
     return buffer.toString();
+  }
+
+  static String buildFullDailyReport(DateTime date, List<Job> jobs, List<SalaryEntry> allEntries, Map<String, int> workerEarnings) {
+    final summaryText = buildSummaryChunk(
+      date,
+      jobs.length,
+      jobs.fold<double>(0.0, (sum, item) => sum + item.quantity),
+      jobs.fold<int>(0, (sum, item) => sum + item.totalAmount),
+    );
+
+    final detailsText = buildJobsDetailText(jobs, allEntries);
+    final earningsText = buildWorkerEarningsChunk(date, workerEarnings);
+
+    return '''$summaryText
+
+$detailsText
+
+$earningsText''';
   }
 
   static Future<void> shareChunk(String text) async {

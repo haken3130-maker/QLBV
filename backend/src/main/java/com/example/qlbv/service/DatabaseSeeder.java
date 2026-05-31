@@ -34,33 +34,44 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        if (appUserRepository.count() == 0) {
-            seedDatabase();
-        }
+        seedDatabase();
     }
 
     private void seedDatabase() {
         System.out.println("--- Seeding qlbv Database with Default Admin and Leader Accounts ---");
 
         // 1. App Users (Operators)
-        AppUser admin = AppUser.builder()
+        createUserIfMissing(AppUser.builder()
                 .uid("admin_uid")
                 .email("admin@qlbv.com")
                 .password(passwordEncoder.encode("admin123"))
                 .name("Quản Lý Admin")
                 .role("admin")
-                .build();
+                .build());
 
-        AppUser leader = AppUser.builder()
+        createUserIfMissing(AppUser.builder()
                 .uid("leader_uid")
                 .email("leader@qlbv.com")
                 .password(passwordEncoder.encode("leader123"))
                 .name("Tổ Trưởng Vương")
                 .role("leader")
-                .build();
+                .build());
 
-        appUserRepository.saveAll(Arrays.asList(admin, leader));
+        createUserIfMissing(AppUser.builder()
+                .uid("thanhnhan_uid")
+                .email("thanhnhan@qlbv.com")
+                .password(passwordEncoder.encode("1971"))
+                .name("Thanh Nhân")
+                .role("leader")
+                .build());
 
         System.out.println("--- Database Initialization Completed ---");
+    }
+
+    private void createUserIfMissing(AppUser user) {
+        appUserRepository.findByEmail(user.getEmail()).ifPresentOrElse(
+                existing -> System.out.println("User already exists: " + existing.getEmail()),
+                () -> appUserRepository.save(user)
+        );
     }
 }

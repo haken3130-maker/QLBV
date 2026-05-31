@@ -10,8 +10,6 @@ import '../models/salary_entry.dart';
 import '../models/salary_payment.dart';
 import '../models/audit_log.dart';
 
-import 'dart:io' show Platform;
-
 class SpringBootDatabaseService implements IDatabaseService {
   @override
   String get name => 'Spring Boot';
@@ -27,11 +25,26 @@ class SpringBootDatabaseService implements IDatabaseService {
   final Dio _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
     connectTimeout: const Duration(seconds: 60),
-    receiveTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(seconds: 180),
+    // increase send timeout as some endpoints may be slow
+    sendTimeout: const Duration(seconds: 60),
   ));
 
   static String? _token;
   static AppUser? _cachedUser;
+
+  static String? get token => _token;
+
+  static void restoreSession(String token, AppUser user) {
+    _token = token;
+    _cachedUser = user;
+    final service = SpringBootDatabaseService();
+    service._refreshEmployees();
+    service._refreshProducts();
+    service._refreshJobs();
+    service._refreshSalaries();
+    service._refreshAuditLogs();
+  }
 
   // StreamControllers to publish reactive updates
   final _employeeStreamController = StreamController<List<Employee>>.broadcast();
@@ -51,10 +64,39 @@ class SpringBootDatabaseService implements IDatabaseService {
         return handler.next(options);
       },
       onError: (e, handler) {
-        debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}');
+        try {
+          final opts = e.requestOptions;
+          debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message} - ${opts.method} ${opts.path} (receiveTimeout=${opts.receiveTimeout ?? 'default'}, connectTimeout=${opts.connectTimeout ?? 'default'})');
+        } catch (_) {
+          debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}');
+        }
         return handler.next(e);
       }
     ));
+  }
+
+  // Simple GET with retry/backoff to handle slow server responses during startup sync.
+  Future<Response> _getWithRetry(String path, {int attempts = 3}) async {
+    int attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+          final resp = await _dio.get(path, options: Options(receiveTimeout: const Duration(seconds: 180)));
+        return resp;
+      } on DioException catch (e) {
+        if (attempt >= attempts) rethrow;
+        // Only retry on timeout or connection related errors
+        if (e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.unknown) {
+          final backoff = Duration(seconds: 1 << (attempt)); // 2,4,8...
+          debugPrint('Retry $_getWithRetry: attempt $attempt for $path after $backoff due to ${e.type}');
+          await Future.delayed(backoff);
+          continue;
+        }
+        rethrow;
+      }
+    }
   }
 
   /// Format DateTime to 'yyyy-MM-ddTHH:mm:ss' without milliseconds or timezone
@@ -127,15 +169,19 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   Future<void> _refreshEmployees() async {
     try {
-      final response = await _dio.get('/api/employees');
+      final response = await _getWithRetry('/api/employees');
       if (response.statusCode == 200) {
         final list = (response.data as List)
             .map((item) => Employee.fromMap(item, item['id']?.toString() ?? ''))
             .toList();
         _employeeStreamController.add(list);
+        return;
       }
     } catch (e) {
       debugPrint('Error fetching employees: $e');
+    }
+    if (!_employeeStreamController.isClosed) {
+      _employeeStreamController.add([]);
     }
   }
 
@@ -164,15 +210,19 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   Future<void> _refreshProducts() async {
     try {
-      final response = await _dio.get('/api/products');
+      final response = await _getWithRetry('/api/products');
       if (response.statusCode == 200) {
         final list = (response.data as List)
             .map((item) => Product.fromMap(item, item['id']))
             .toList();
         _productStreamController.add(list);
+        return;
       }
     } catch (e) {
       debugPrint('Error fetching products: $e');
+    }
+    if (!_productStreamController.isClosed) {
+      _productStreamController.add([]);
     }
   }
 
@@ -201,15 +251,19 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   Future<void> _refreshJobs() async {
     try {
-      final response = await _dio.get('/api/jobs');
+      final response = await _getWithRetry('/api/jobs');
       if (response.statusCode == 200) {
         final list = (response.data as List)
             .map((item) => Job.fromMap(item, item['id']))
             .toList();
         _jobStreamController.add(list);
+        return;
       }
     } catch (e) {
       debugPrint('Error fetching jobs: $e');
+    }
+    if (!_jobStreamController.isClosed) {
+      _jobStreamController.add([]);
     }
   }
 
@@ -302,26 +356,38 @@ class SpringBootDatabaseService implements IDatabaseService {
   // --- Salary operations ---
 
   Future<void> _refreshSalaries() async {
+    var entriesEmitted = false;
     try {
-      // 1. Fetch entries
-      final responseEntries = await _dio.get('/api/salaries/entries');
+      final responseEntries = await _getWithRetry('/api/salaries/entries');
       if (responseEntries.statusCode == 200) {
         final list = (responseEntries.data as List)
             .map((item) => SalaryEntry.fromMap(item, item['id']))
             .toList();
         _salaryEntryStreamController.add(list);
+        entriesEmitted = true;
       }
+    } catch (e) {
+      debugPrint('Error fetching salary entries: $e');
+    }
+    if (!entriesEmitted && !_salaryEntryStreamController.isClosed) {
+      _salaryEntryStreamController.add([]);
+    }
 
-      // 2. Fetch payments
-      final responsePayments = await _dio.get('/api/salaries/payments');
+    var paymentsEmitted = false;
+    try {
+      final responsePayments = await _getWithRetry('/api/salaries/payments');
       if (responsePayments.statusCode == 200) {
         final list = (responsePayments.data as List)
             .map((item) => SalaryPayment.fromMap(item, item['id']))
             .toList();
         _salaryPaymentStreamController.add(list);
+        paymentsEmitted = true;
       }
     } catch (e) {
-      debugPrint('Error fetching salary details: $e');
+      debugPrint('Error fetching salary payments: $e');
+    }
+    if (!paymentsEmitted && !_salaryPaymentStreamController.isClosed) {
+      _salaryPaymentStreamController.add([]);
     }
   }
 
@@ -365,15 +431,19 @@ class SpringBootDatabaseService implements IDatabaseService {
   Future<void> _refreshAuditLogs() async {
     if (_cachedUser?.role != 'admin') return;
     try {
-      final response = await _dio.get('/api/audit-logs');
+      final response = await _getWithRetry('/api/audit-logs');
       if (response.statusCode == 200) {
         final list = (response.data as List)
             .map((item) => AuditLog.fromMap(item, item['id']))
             .toList();
         _auditLogStreamController.add(list);
+        return;
       }
     } catch (e) {
       debugPrint('Error fetching audit logs: $e');
+    }
+    if (!_auditLogStreamController.isClosed) {
+      _auditLogStreamController.add([]);
     }
   }
 
