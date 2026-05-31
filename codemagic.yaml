@@ -49,12 +49,16 @@ workflows:
           # Prefer raw JSON secret; fall back to base64-encoded secret
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "Writing google-services.json from GOOGLE_SERVICES_JSON"
-            mkdir -p android/app
+            mkdir -p android/app android/app/src android/app/src/release
             echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "$GOOGLE_SERVICES_JSON" > android/app/src/google-services.json
+            echo "$GOOGLE_SERVICES_JSON" > android/app/src/release/google-services.json
           elif [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "Decoding and writing google-services.json from GOOGLE_SERVICES_JSON_BASE64"
-            mkdir -p android/app
+            mkdir -p android/app android/app/src android/app/src/release
             echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/src/google-services.json
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/src/release/google-services.json
           else
             echo "ERROR: No google-services.json provided via GOOGLE_SERVICES_JSON or GOOGLE_SERVICES_JSON_BASE64"
             echo "Add the google-services.json as a Codemagic secret and re-run the build."
