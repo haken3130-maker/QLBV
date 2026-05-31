@@ -29,8 +29,21 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        String path = request.getServletPath();
+        if (isPublicPath(path)) {
+            logger.debug("Public path, skipping JWT filter: {}", path);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         try {
             String jwt = parseJwt(request);
+            if (jwt != null) {
+                logger.debug("JWT found in Authorization header for path {}", path);
+            } else {
+                logger.debug("No JWT found for path {}", path);
+            }
+
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
@@ -46,6 +59,10 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPublicPath(String path) {
+        return path.startsWith("/api/auth/") || path.equals("/health");
     }
 
     private String parseJwt(HttpServletRequest request) {
