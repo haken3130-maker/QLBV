@@ -64,6 +64,28 @@ workflows:
             echo "Add the google-services.json as a Codemagic secret and re-run the build."
             exit 1
           fi
+      - name: Verify google-services.json was created
+        script: |
+          FILES=("android/app/google-services.json" "android/app/src/google-services.json" "android/app/src/release/google-services.json")
+          FOUND=0
+          for f in "${FILES[@]}"; do
+            if [ -f "$f" ]; then
+              FOUND=1
+              SIZE=$(wc -c < "$f" 2>/dev/null || echo "0")
+              if command -v sha256sum >/dev/null 2>&1; then
+                SHA=$(sha256sum "$f" | awk '{print $1}')
+              else
+                SHA="(sha256sum not available)"
+              fi
+              echo "FOUND: $f — size=${SIZE} bytes — sha256=${SHA}"
+            else
+              echo "MISSING: $f"
+            fi
+          done
+          if [ "$FOUND" -ne 1 ]; then
+            echo "ERROR: google-services.json was not created in expected locations. Check Codemagic secrets and retry."
+            exit 1
+          fi
       - name: Build app bundle
         script: |
           flutter build appbundle --release
