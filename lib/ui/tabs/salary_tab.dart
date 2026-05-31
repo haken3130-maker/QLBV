@@ -35,7 +35,7 @@ class _SalaryTabState extends State<SalaryTab> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _RecordPaymentDialog(),
+      builder: (_) => const RecordPaymentDialog(),
     );
   }
 
@@ -435,14 +435,14 @@ class _SalaryTabState extends State<SalaryTab> with TickerProviderStateMixin {
   }
 }
 
-class _RecordPaymentDialog extends StatefulWidget {
-  const _RecordPaymentDialog();
+class RecordPaymentDialog extends StatefulWidget {
+  const RecordPaymentDialog();
 
   @override
-  State<_RecordPaymentDialog> createState() => _RecordPaymentDialogState();
+  State<RecordPaymentDialog> createState() => RecordPaymentDialogState();
 }
 
-class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
+class RecordPaymentDialogState extends State<RecordPaymentDialog> {
   final _formKey = GlobalKey<FormState>();
   Employee? _selectedEmployee;
   final _amountController = TextEditingController();

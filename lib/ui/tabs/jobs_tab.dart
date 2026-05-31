@@ -62,7 +62,7 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _CreateJobDialog(),
+      builder: (_) => const CreateJobDialog(),
     );
   }
 
@@ -733,14 +733,14 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
   }
 }
 
-class _CreateJobDialog extends StatefulWidget {
-  const _CreateJobDialog();
+class CreateJobDialog extends StatefulWidget {
+  const CreateJobDialog();
 
   @override
-  State<_CreateJobDialog> createState() => _CreateJobDialogState();
+  State<CreateJobDialog> createState() => CreateJobDialogState();
 }
 
-class _CreateJobDialogState extends State<_CreateJobDialog> {
+class CreateJobDialogState extends State<CreateJobDialog> {
   final _formKey = GlobalKey<FormState>();
   DateTime _selectedDate = DateTime.now();
   Product? _selectedProduct;

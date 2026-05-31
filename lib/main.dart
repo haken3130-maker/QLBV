@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/auth_provider.dart';
 import 'providers/salary_provider.dart';
+import 'providers/tab_notifier.dart';
 import 'ui/theme.dart';
 import 'ui/auth/login_screen.dart';
 
@@ -21,6 +22,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => SalaryProvider()),
+        ChangeNotifierProvider(create: (_) => TabNotifier()),
       ],
       child: MaterialApp(
         title: 'Quản Lý Lương Bốc Vác',

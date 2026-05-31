@@ -24,7 +24,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
   }
 
   void _openAddEmployeeDialog(BuildContext context) {
-    showDialog(context: context, builder: (_) => const _AddEmployeeDialog());
+    showDialog(context: context, builder: (_) => const AddEmployeeDialog());
   }
 
   void _openEditEmployeeDialog(BuildContext context, Employee emp) {
@@ -278,14 +278,14 @@ class _EmployeesTabState extends State<EmployeesTab> {
   }
 }
 
-class _AddEmployeeDialog extends StatefulWidget {
-  const _AddEmployeeDialog();
+class AddEmployeeDialog extends StatefulWidget {
+  const AddEmployeeDialog();
 
   @override
-  State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
+  State<AddEmployeeDialog> createState() => AddEmployeeDialogState();
 }
 
-class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
+class AddEmployeeDialogState extends State<AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();

@@ -4,6 +4,10 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../providers/salary_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/tab_notifier.dart';
+import 'jobs_tab.dart';
+import 'employees_tab.dart';
+import 'salary_tab.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -747,8 +751,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             label: 'Tạo việc',
             color: const Color(0xFF4CAF50),
             onTap: () {
-              // Navigate to jobs tab (index 1)
-              _navigateToTab(context, 1);
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const CreateJobDialog(),
+              );
             },
           ),
         ),
@@ -759,7 +766,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             label: 'Thêm NV',
             color: const Color(0xFF2196F3),
             onTap: () {
-              _navigateToTab(context, 2);
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const AddEmployeeDialog(),
+              );
             },
           ),
         ),
@@ -770,7 +781,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             label: 'Phát lương',
             color: const Color(0xFFFF9800),
             onTap: () {
-              _navigateToTab(context, 4);
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const RecordPaymentDialog(),
+              );
             },
           ),
         ),
@@ -781,7 +796,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             label: 'Báo cáo',
             color: const Color(0xFF9C27B0),
             onTap: () {
-              _navigateToTab(context, 5);
+              Provider.of<TabNotifier>(context, listen: false).navigateTo(5);
             },
           ),
         ),
@@ -828,21 +843,6 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         ),
       ),
     );
-  }
-
-  void _navigateToTab(BuildContext context, int index) {
-    // Find ancestor state to change tab
-    final navState = context.findAncestorStateOfType<State>();
-    if (navState != null && navState.mounted) {
-      // Use a callback to set the navigation index
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Vui lòng chọn tab tương ứng ở thanh điều hướng bên dưới.'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
   }
 
   String _formatShortCurrency(int amount) {
