@@ -55,18 +55,37 @@ class SpringBootDatabaseService implements IDatabaseService {
   final _auditLogStreamController = StreamController<List<AuditLog>>.broadcast();
 
   SpringBootDatabaseService() {
+    // Helpful debug: print effective base URL when service constructed
+    debugPrint('SpringBootDatabaseService baseUrl=$_baseUrl');
     // Add Interceptor to automatically append JWT bearer token to requests
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
+        // Log outgoing requests in debug builds
+        debugPrint('API Request: ${options.method} ${options.baseUrl}${options.path}');
+        if (options.data != null) {
+          try {
+            debugPrint('Request body: ${options.data}');
+          } catch (_) {}
+        }
         if (_token != null) {
           options.headers['Authorization'] = 'Bearer $_token';
         }
         return handler.next(options);
       },
+      onResponse: (response, handler) {
+        // Log responses for easier remote debugging
+        try {
+          debugPrint('API Response: ${response.statusCode} ${response.requestOptions.path} -> ${response.data}');
+        } catch (_) {}
+        return handler.next(response);
+      },
       onError: (e, handler) {
         try {
           final opts = e.requestOptions;
           debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message} - ${opts.method} ${opts.path} (receiveTimeout=${opts.receiveTimeout ?? 'default'}, connectTimeout=${opts.connectTimeout ?? 'default'})');
+          if (e.response?.data != null) {
+            debugPrint('Error response body: ${e.response?.data}');
+          }
         } catch (_) {
           debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}');
         }
@@ -115,10 +134,13 @@ class SpringBootDatabaseService implements IDatabaseService {
   @override
   Future<AppUser?> signIn(String email, String password) async {
     try {
+      debugPrint('Signing in with email=$email');
       final response = await _dio.post('/api/auth/login', data: {
         'email': email,
         'password': password,
       });
+
+      debugPrint('SignIn response status=${response.statusCode} body=${response.data}');
 
       if (response.statusCode == 200) {
         final data = response.data;
