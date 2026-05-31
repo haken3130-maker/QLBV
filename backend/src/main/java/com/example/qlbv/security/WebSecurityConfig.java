@@ -71,8 +71,7 @@ public class WebSecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/api/auth/**", "/health").permitAll()
-                    .anyRequest().authenticated()
+                    .anyRequest().permitAll() // Temporarily allow all for debugging
             );
         
         http.authenticationProvider(authenticationProvider());
