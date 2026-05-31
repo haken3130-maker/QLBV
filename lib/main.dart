@@ -3,17 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/auth_provider.dart';
 import 'providers/salary_provider.dart';
-import 'repositories/salary_repository.dart';
 import 'ui/theme.dart';
 import 'ui/auth/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('vi', null);
-  
-  // Default to Spring Boot Server database for production use
-  SalaryRepository().configureService(true);
-
   runApp(const MyApp());
 }
 

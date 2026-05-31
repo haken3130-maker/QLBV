@@ -1,5 +1,4 @@
 import '../services/database_service.dart';
-import '../services/mock_database_service.dart';
 import '../services/springboot_database_service.dart';
 import '../models/app_user.dart';
 import '../models/employee.dart';
@@ -14,14 +13,7 @@ class SalaryRepository implements IDatabaseService {
   factory SalaryRepository() => _instance;
   SalaryRepository._internal();
 
-  IDatabaseService _activeService = SpringBootDatabaseService();
-
-  void configureService(bool useServer) {
-    // Enforce production server mode
-    _activeService = SpringBootDatabaseService();
-  }
-
-  IDatabaseService get activeService => _activeService;
+  final IDatabaseService _activeService = SpringBootDatabaseService();
 
   @override
   String get name => _activeService.name;

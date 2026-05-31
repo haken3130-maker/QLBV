@@ -41,11 +41,5 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void switchDatabaseMode(bool useServer) {
-    _repository.configureService(useServer);
-    _currentUser = null;
-    notifyListeners();
-  }
-  
-  String get activeDatabaseName => _repository.name;
+
 }
