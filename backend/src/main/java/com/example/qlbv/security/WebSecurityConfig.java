@@ -71,7 +71,9 @@ public class WebSecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .anyRequest().permitAll() // Temporarily allow all for debugging
+                    .requestMatchers("/api/auth/**", "/health").permitAll()
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    .anyRequest().authenticated()
             );
         
         http.authenticationProvider(authenticationProvider());
