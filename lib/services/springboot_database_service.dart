@@ -69,22 +69,35 @@ class SpringBootDatabaseService implements IDatabaseService {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         // Log outgoing requests in debug builds
-        debugPrint('API Request: ${options.method} ${options.baseUrl}${options.path}');
+        final path = '${options.baseUrl}${options.path}';
+        debugPrint('[onRequest] ===== OUTGOING REQUEST =====');
+        debugPrint('[onRequest] ${options.method} $path');
+        debugPrint('[onRequest] skipAuth flag: ${options.extra['skipAuth']}');
+        debugPrint('[onRequest] Current token: ${_token != null ? 'Bearer ${_token!.substring(0, 10)}...' : 'NULL'}');
+        
         if (options.data != null) {
           try {
-            debugPrint('Request body: ${options.data}');
+            debugPrint('[onRequest] Request body: ${options.data}');
           } catch (_) {}
         }
+        
         // Allow certain calls (e.g. token refresh) to opt-out of automatic
         // Authorization header injection by setting `options.extra['skipAuth'] = true`.
         if (options.extra['skipAuth'] != true && _token != null) {
           options.headers['Authorization'] = 'Bearer $_token';
+          debugPrint('[onRequest] Authorization header INJECTED');
+        } else if (options.extra['skipAuth'] == true) {
+          debugPrint('[onRequest] Authorization header SKIPPED (skipAuth=true)');
+        } else if (_token == null) {
+          debugPrint('[onRequest] Authorization header SKIPPED (token is null)');
         }
+        
         final authHeader = options.headers['Authorization'];
-        debugPrint('Authorization header present: ${authHeader != null}');
+        debugPrint('[onRequest] Authorization header present: ${authHeader != null}');
         if (authHeader != null) {
-          debugPrint('Authorization header value: Bearer ****');
+          debugPrint('[onRequest] Authorization header: Bearer ****');
         }
+        debugPrint('[onRequest] ===========================');
         return handler.next(options);
       },
       onResponse: (response, handler) {

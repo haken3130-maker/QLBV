@@ -31,7 +31,10 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String path = request.getServletPath();
         String method = request.getMethod();
-        logger.info("=== [AuthTokenFilter] Request: {} {}", method, path);
+        String authHeader = request.getHeader("Authorization");
+        
+        logger.info("=== [AuthTokenFilter] Request: {} {} ===", method, path);
+        logger.info("[AuthTokenFilter] Authorization header: {}", authHeader != null ? authHeader.substring(0, Math.min(20, authHeader.length())) + "..." : "NULL");
         
         if (isPublicPath(path)) {
             logger.info("[AuthTokenFilter] PUBLIC path detected, skipping JWT validation: {}", path);
@@ -46,7 +49,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             if (jwt != null) {
                 logger.debug("JWT found in Authorization header for path {}", path);
             } else {
-                logger.debug("No JWT found for path {}", path);
+                logger.warn("[AuthTokenFilter] No JWT found for PROTECTED path: {}", path);
             }
 
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
@@ -58,6 +61,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.info("[AuthTokenFilter] Authentication set for user: {}", username);
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e.getMessage());
