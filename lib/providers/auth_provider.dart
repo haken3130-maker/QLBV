@@ -30,6 +30,7 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = user;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', SpringBootDatabaseService.token ?? '');
+      await prefs.setString('auth_refresh_token', SpringBootDatabaseService.refreshToken ?? '');
       await prefs.setString('auth_user_uid', _currentUser?.uid ?? '');
       await prefs.setString('auth_user_email', _currentUser?.email ?? '');
       await prefs.setString('auth_user_name', _currentUser?.name ?? '');
@@ -51,14 +52,15 @@ class AuthProvider extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
+    final refreshToken = prefs.getString('auth_refresh_token');
     final uid = prefs.getString('auth_user_uid');
     final email = prefs.getString('auth_user_email');
     final name = prefs.getString('auth_user_name');
     final role = prefs.getString('auth_user_role');
 
-    if (token != null && token.isNotEmpty && uid != null && uid.isNotEmpty && email != null && name != null && role != null) {
+    if (token != null && token.isNotEmpty && refreshToken != null && refreshToken.isNotEmpty && uid != null && uid.isNotEmpty && email != null && name != null && role != null) {
       _currentUser = AppUser(uid: uid, email: email, name: name, role: role);
-      SpringBootDatabaseService.restoreSession(token, _currentUser!);
+      SpringBootDatabaseService.restoreSession(token, refreshToken, _currentUser!);
     }
 
     _isInitializing = false;
@@ -68,6 +70,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
+    await prefs.remove('auth_refresh_token');
     await prefs.remove('auth_user_uid');
     await prefs.remove('auth_user_email');
     await prefs.remove('auth_user_name');

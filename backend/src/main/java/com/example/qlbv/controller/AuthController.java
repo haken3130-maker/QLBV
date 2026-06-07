@@ -1,9 +1,13 @@
 package com.example.qlbv.controller;
 
+import com.example.qlbv.entity.RefreshToken;
 import com.example.qlbv.security.jwt.JwtUtils;
+import com.example.qlbv.security.jwt.TokenRefreshException;
 import com.example.qlbv.security.services.UserDetailsImpl;
+import com.example.qlbv.service.RefreshTokenService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,6 +25,9 @@ public class AuthController {
     @Autowired
     JwtUtils jwtUtils;
 
+    @Autowired
+    RefreshTokenService refreshTokenService;
+
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
 
@@ -36,13 +43,32 @@ public class AuthController {
                 .map(item -> item.getAuthority().replace("ROLE_", "").toLowerCase())
                 .orElse("leader");
 
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getUid());
+
         return ResponseEntity.ok(new JwtResponse(
                 jwt,
+                refreshToken.getToken(),
                 userDetails.getUid(),
                 userDetails.getEmail(),
                 userDetails.getUsername(), // In our impl, username is email
                 role
         ));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
+        String requestRefreshToken = request.getRefreshToken();
+
+        return refreshTokenService.findByToken(requestRefreshToken)
+                .map(refreshTokenService::verifyExpiration)
+                .map(RefreshToken::getUser)
+                .map(user -> {
+                    String token = jwtUtils.generateTokenFromUsername(user.getEmail());
+                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getUid());
+                    return ResponseEntity.ok(new TokenRefreshResponse(token, newRefreshToken.getToken()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new MessageResponse("Refresh token không hợp lệ!")));
     }
 
     // Request & Response DTOs
@@ -58,13 +84,15 @@ public class AuthController {
 
     public static class JwtResponse {
         private String token;
+        private String refreshToken;
         private String uid;
         private String email;
         private String name;
         private String role;
 
-        public JwtResponse(String token, String uid, String email, String name, String role) {
+        public JwtResponse(String token, String refreshToken, String uid, String email, String name, String role) {
             this.token = token;
+            this.refreshToken = refreshToken;
             this.uid = uid;
             this.email = email;
             this.name = name;
@@ -72,9 +100,40 @@ public class AuthController {
         }
 
         public String getToken() { return token; }
+        public String getRefreshToken() { return refreshToken; }
         public String getUid() { return uid; }
         public String getEmail() { return email; }
         public String getName() { return name; }
         public String getRole() { return role; }
+    }
+
+    public static class TokenRefreshRequest {
+        private String refreshToken;
+
+        public String getRefreshToken() { return refreshToken; }
+        public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
+    }
+
+    public static class TokenRefreshResponse {
+        private String token;
+        private String refreshToken;
+
+        public TokenRefreshResponse(String token, String refreshToken) {
+            this.token = token;
+            this.refreshToken = refreshToken;
+        }
+
+        public String getToken() { return token; }
+        public String getRefreshToken() { return refreshToken; }
+    }
+
+    public static class MessageResponse {
+        private String message;
+
+        public MessageResponse(String message) {
+            this.message = message;
+        }
+
+        public String getMessage() { return message; }
     }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'database_service.dart';
 import '../models/app_user.dart';
 import '../models/employee.dart';
@@ -31,12 +32,16 @@ class SpringBootDatabaseService implements IDatabaseService {
   ));
 
   static String? _token;
+  static String? _refreshToken;
   static AppUser? _cachedUser;
+  static Completer<void>? _refreshCompleter;
 
   static String? get token => _token;
+  static String? get refreshToken => _refreshToken;
 
-  static void restoreSession(String token, AppUser user) {
+  static void restoreSession(String token, String? refreshToken, AppUser user) {
     _token = token;
+    _refreshToken = refreshToken;
     _cachedUser = user;
     final service = SpringBootDatabaseService();
     service._refreshEmployees();
@@ -73,6 +78,11 @@ class SpringBootDatabaseService implements IDatabaseService {
         if (_token != null) {
           options.headers['Authorization'] = 'Bearer $_token';
         }
+        final authHeader = options.headers['Authorization'];
+        debugPrint('Authorization header present: ${authHeader != null}');
+        if (authHeader != null) {
+          debugPrint('Authorization header value: Bearer ****');
+        }
         return handler.next(options);
       },
       onResponse: (response, handler) {
@@ -82,12 +92,26 @@ class SpringBootDatabaseService implements IDatabaseService {
         } catch (_) {}
         return handler.next(response);
       },
-      onError: (e, handler) {
+      onError: (e, handler) async {
         try {
           final opts = e.requestOptions;
           debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message} - ${opts.method} ${opts.path} (receiveTimeout=${opts.receiveTimeout ?? 'default'}, connectTimeout=${opts.connectTimeout ?? 'default'})');
           if (e.response?.data != null) {
             debugPrint('Error response body: ${e.response?.data}');
+          }
+
+          if (e.response?.statusCode == 401 &&
+              opts.path != '/api/auth/login' &&
+              opts.path != '/api/auth/refresh' &&
+              opts.extra['retried'] != true) {
+            try {
+              await _refreshAccessToken();
+              opts.extra['retried'] = true;
+              final response = await _dio.fetch(opts);
+              return handler.resolve(response);
+            } catch (refreshError) {
+              debugPrint('Refresh token failed: $refreshError');
+            }
           }
         } catch (_) {
           debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}');
@@ -132,6 +156,74 @@ class SpringBootDatabaseService implements IDatabaseService {
         '${dt.second.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _refreshAccessToken() async {
+    if (_refreshToken == null) {
+      throw Exception('Không có refresh token để làm mới phiên.');
+    }
+
+    if (_refreshCompleter != null) {
+      return _refreshCompleter!.future;
+    }
+
+    _refreshCompleter = Completer<void>();
+    try {
+      final response = await _dio.post('/api/auth/refresh', data: {
+        'refreshToken': _refreshToken,
+      });
+
+      if (response.statusCode == 200 && response.data != null) {
+        _token = response.data['token'] as String?;
+        _refreshToken = response.data['refreshToken'] as String?;
+
+        final prefs = await SharedPreferences.getInstance();
+        if (_token != null) {
+          await prefs.setString('auth_token', _token!);
+        }
+        if (_refreshToken != null) {
+          await prefs.setString('auth_refresh_token', _refreshToken!);
+        }
+
+        _refreshCompleter!.complete();
+        return;
+      }
+
+      throw Exception('Không thể làm mới token.');
+    } catch (e) {
+      _refreshCompleter!.completeError(e);
+      rethrow;
+    } finally {
+      _refreshCompleter = null;
+    }
+  }
+
+  Exception _buildApiException(DioException e, [String fallbackMessage = 'Yêu cầu thất bại']) {
+    final statusCode = e.response?.statusCode;
+    if (statusCode != null) {
+      if (statusCode == 401) {
+        return Exception('Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      if (statusCode == 403) {
+        return Exception('Bạn không có quyền thực hiện thao tác này.');
+      }
+      if (e.response?.data is Map) {
+        final responseData = e.response?.data as Map;
+        final errorMessage = responseData['error'] ?? responseData['message'] ?? responseData['detail'];
+        if (errorMessage is String && errorMessage.isNotEmpty) {
+          return Exception(errorMessage);
+        }
+      }
+      return Exception('Lỗi máy chủ: $statusCode');
+    }
+
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return Exception('Không thể kết nối đến máy chủ Spring Boot. Vui lòng thử lại.');
+    }
+
+    return Exception(fallbackMessage);
+  }
+
   // --- Auth operations ---
 
   @override
@@ -148,6 +240,7 @@ class SpringBootDatabaseService implements IDatabaseService {
       if (response.statusCode == 200) {
         final data = response.data;
         _token = data['token'];
+        _refreshToken = data['refreshToken'];
         
         final user = AppUser(
           uid: data['uid'] ?? '',
@@ -182,6 +275,7 @@ class SpringBootDatabaseService implements IDatabaseService {
   @override
   Future<void> signOut() async {
     _token = null;
+    _refreshToken = null;
     _cachedUser = null;
   }
 
@@ -233,7 +327,12 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   @override
   Future<void> deleteEmployee(String employeeId) async {
-    await _dio.delete('/api/employees/$employeeId');
+    try {
+      await _dio.delete('/api/employees/$employeeId');
+    } on DioException catch (e) {
+      throw _buildApiException(e, 'Xóa nhân viên thất bại.');
+    }
+
     await _refreshEmployees();
     await _refreshSalaries();
     _refreshJobs();
@@ -283,7 +382,12 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   @override
   Future<void> deleteProduct(String productId) async {
-    await _dio.delete('/api/products/$productId');
+    try {
+      await _dio.delete('/api/products/$productId');
+    } on DioException catch (e) {
+      throw _buildApiException(e, 'Xóa sản phẩm thất bại.');
+    }
+
     await _refreshProducts();
   }
 

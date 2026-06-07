@@ -1,5 +1,6 @@
 package com.example.qlbv.security;
 
+import com.example.qlbv.security.jwt.AuthAccessDeniedHandler;
 import com.example.qlbv.security.jwt.AuthEntryPointJwt;
 import com.example.qlbv.security.jwt.AuthTokenFilter;
 import com.example.qlbv.security.services.UserDetailsServiceImpl;
@@ -67,7 +68,10 @@ public class WebSecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
-            .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
+            .exceptionHandling(exception -> exception
+                .authenticationEntryPoint(unauthorizedHandler)
+                .accessDeniedHandler(accessDeniedHandler())
+            )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -80,6 +84,11 @@ public class WebSecurityConfig {
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
+    }
+
+    @Bean
+    public AuthAccessDeniedHandler accessDeniedHandler() {
+        return new AuthAccessDeniedHandler();
     }
 
     @Bean
