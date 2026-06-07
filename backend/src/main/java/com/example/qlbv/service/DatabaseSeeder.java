@@ -38,34 +38,42 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void seedDatabase() {
-        System.out.println("--- Seeding qlbv Database with Default Admin and Leader Accounts ---");
+        try {
+            System.out.println("=== [DatabaseSeeder] Starting database initialization ===");
+            
+            // 1. App Users (Operators)
+            System.out.println("[DatabaseSeeder] Creating/updating admin@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("admin_uid")
+                    .email("admin@qlbv.com")
+                    .password(passwordEncoder.encode("admin123"))
+                    .name("Quản Lý Admin")
+                    .role("admin")
+                    .build());
 
-        // 1. App Users (Operators)
-        createOrUpdateUser(AppUser.builder()
-                .uid("admin_uid")
-                .email("admin@qlbv.com")
-                .password(passwordEncoder.encode("admin123"))
-                .name("Quản Lý Admin")
-                .role("admin")
-                .build());
+            System.out.println("[DatabaseSeeder] Creating/updating leader@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("leader_uid")
+                    .email("leader@qlbv.com")
+                    .password(passwordEncoder.encode("leader123"))
+                    .name("Tổ Trưởng Vương")
+                    .role("leader")
+                    .build());
 
-        createOrUpdateUser(AppUser.builder()
-                .uid("leader_uid")
-                .email("leader@qlbv.com")
-                .password(passwordEncoder.encode("leader123"))
-                .name("Tổ Trưởng Vương")
-                .role("leader")
-                .build());
+            System.out.println("[DatabaseSeeder] Creating/updating thanhnhan@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("thanhnhan_uid")
+                    .email("thanhnhan@qlbv.com")
+                    .password(passwordEncoder.encode("thanhnhan123"))
+                    .name("Thanh Nhân")
+                    .role("admin")
+                    .build());
 
-        createOrUpdateUser(AppUser.builder()
-                .uid("thanhnhan_uid")
-                .email("thanhnhan@qlbv.com")
-                .password(passwordEncoder.encode("thanhnhan123"))
-                .name("Thanh Nhân")
-                .role("admin")
-                .build());
-
-        System.out.println("--- Database Initialization Completed ---");
+            System.out.println("=== [DatabaseSeeder] Database initialization completed successfully ===");
+        } catch (Exception e) {
+            System.err.println("[DatabaseSeeder] ERROR during initialization: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void createOrUpdateUser(AppUser user) {
