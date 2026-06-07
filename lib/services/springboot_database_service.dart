@@ -113,6 +113,10 @@ class SpringBootDatabaseService implements IDatabaseService {
               return handler.resolve(response);
             } catch (refreshError) {
               debugPrint('Refresh token failed: $refreshError');
+              // If refresh fails, log out user since tokens are invalid
+              _token = null;
+              _refreshToken = null;
+              _cachedUser = null;
             }
           }
         } catch (_) {
