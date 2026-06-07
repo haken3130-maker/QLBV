@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -6,6 +7,7 @@ import '../../providers/salary_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/employee.dart';
 import '../../models/job.dart';
+import '../../utils/number_formatters.dart';
 
 class SalaryTab extends StatefulWidget {
   const SalaryTab({super.key});
@@ -380,7 +382,7 @@ class _SalaryTabState extends State<SalaryTab> with TickerProviderStateMixin {
                                                       ),
                                                       const SizedBox(width: 6),
                                                       Text(
-                                                        '(' + (emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id) + ')',
+                                                        '(${emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id})',
                                                         style: const TextStyle(fontSize: 11, color: Colors.grey),
                                                       ),
                                                       if (isInactive) ...[
@@ -693,7 +695,7 @@ String _buildEmployeeShareText(
 
 class RecordPaymentDialog extends StatefulWidget {
   final Employee? initialEmployee;
-  const RecordPaymentDialog({Key? key, this.initialEmployee}) : super(key: key);
+  const RecordPaymentDialog({super.key, this.initialEmployee});
 
   @override
   State<RecordPaymentDialog> createState() => RecordPaymentDialogState();
@@ -736,7 +738,7 @@ class RecordPaymentDialogState extends State<RecordPaymentDialog> {
     final balance = earned - paid;
 
     if (balance > 0) {
-      _amountController.text = balance.toString();
+      _amountController.text = formatCurrency(balance);
       _amountHelperText = 'Tự động điền số tiền còn nợ: ${NumberFormat.currency(locale: 'vi_VN', symbol: 'đ').format(balance)}';
     } else {
       _amountController.text = '0';
@@ -783,7 +785,7 @@ class RecordPaymentDialogState extends State<RecordPaymentDialog> {
 
       await salaryProv.recordPayment(
         employeeId: _selectedEmployee!.id,
-        amount: int.parse(_amountController.text),
+        amount: parseCurrencyInt(_amountController.text),
         date: _paymentDate,
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         createdBy: authProv.currentUser?.email ?? 'Unknown',
@@ -857,7 +859,7 @@ class RecordPaymentDialogState extends State<RecordPaymentDialog> {
                 const Text('Nhân viên nhận', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50))),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<Employee>(
-                  value: _selectedEmployee,
+                  initialValue: _selectedEmployee,
                   hint: const Text('Chọn nhân viên'),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.person_outline),
@@ -885,6 +887,10 @@ class RecordPaymentDialogState extends State<RecordPaymentDialog> {
                 TextFormField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    ThousandsSeparatorInputFormatter(),
+                  ],
                   decoration: InputDecoration(
                     hintText: 'VD: 5000000',
                     prefixIcon: const Icon(Icons.monetization_on_outlined),
@@ -896,7 +902,7 @@ class RecordPaymentDialogState extends State<RecordPaymentDialog> {
                   ),
                   validator: (val) {
                     if (val == null || val.isEmpty) return 'Vui lòng nhập số tiền';
-                    if (int.tryParse(val) == null) return 'Số tiền phải là số nguyên';
+                    if (val.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Số tiền phải là số nguyên';
                     return null;
                   },
                 ),
@@ -1174,12 +1180,12 @@ class _WorkerSalaryDetailsDialog extends StatelessWidget {
                     children: [
                       // Tab 1: Work list
                       empEntries.isEmpty
-                          ? const Center(child: Text('Chưa có lịch sử bốc xếp.', style: TextStyle(color: Colors.grey, fontSize: 13)))
+                          ? const Center(child: Text('Chưa có lịch sử lương.', style: TextStyle(color: Colors.grey, fontSize: 13)))
                           : ListView.separated(
                               physics: const BouncingScrollPhysics(),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               itemCount: empEntries.length,
-                              separatorBuilder: (_, __) => Divider(height: 16, color: Colors.grey.shade100),
+                              separatorBuilder: (_, _) => Divider(height: 16, color: Colors.grey.shade100),
                               itemBuilder: (context, idx) {
                                 final entry = empEntries[idx];
                                 final relatedJob = salaryProv.jobs.firstWhere(
@@ -1233,7 +1239,7 @@ class _WorkerSalaryDetailsDialog extends StatelessWidget {
                               physics: const BouncingScrollPhysics(),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               itemCount: empPayments.length,
-                              separatorBuilder: (_, __) => Divider(height: 16, color: Colors.grey.shade100),
+                              separatorBuilder: (_, _) => Divider(height: 16, color: Colors.grey.shade100),
                               itemBuilder: (context, idx) {
                                 final p = empPayments[idx];
                                 return ListTile(

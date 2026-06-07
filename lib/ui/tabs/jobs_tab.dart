@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/salary_provider.dart';
@@ -7,6 +8,7 @@ import '../../models/job.dart';
 import '../../models/product.dart';
 import '../../models/employee.dart';
 import '../job_detail_screen.dart';
+import '../../utils/number_formatters.dart';
 
 class JobsTab extends StatefulWidget {
   const JobsTab({super.key});
@@ -139,7 +141,7 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
                         icon: Icons.scale_outlined,
                         color: const Color(0xFF1565C0),
                         label: 'Sản lượng',
-                        value: '${statsTotalVolume.toStringAsFixed(1)}',
+                        value: statsTotalVolume.toStringAsFixed(1),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -734,7 +736,7 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
 }
 
 class CreateJobDialog extends StatefulWidget {
-  const CreateJobDialog();
+  const CreateJobDialog({super.key});
 
   @override
   State<CreateJobDialog> createState() => CreateJobDialogState();
@@ -763,14 +765,14 @@ class CreateJobDialogState extends State<CreateJobDialog> {
     setState(() {
       _selectedProduct = prod;
       if (prod != null) {
-        _priceController.text = prod.defaultPrice.toString();
+        _priceController.text = formatCurrency(prod.defaultPrice);
       }
     });
   }
 
   int get _calculatedTotal {
     final quantity = double.tryParse(_quantityController.text) ?? 0.0;
-    final price = int.tryParse(_priceController.text) ?? 0;
+    final price = parseCurrencyInt(_priceController.text);
     return (quantity * price).round();
   }
 
@@ -819,7 +821,7 @@ class CreateJobDialogState extends State<CreateJobDialog> {
         date: _selectedDate,
         product: _selectedProduct!,
         quantity: double.parse(_quantityController.text),
-        unitPrice: int.parse(_priceController.text),
+        unitPrice: parseCurrencyInt(_priceController.text),
         participantIds: _selectedParticipants,
         createdBy: authProv.currentUser?.email ?? 'Unknown',
       );
@@ -939,12 +941,12 @@ class CreateJobDialogState extends State<CreateJobDialog> {
 
                       // Product Selector
                       const Text(
-                        'Loại sản phẩm bốc xếp',
+                        'Loại sản phẩm',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<Product>(
-                        value: _selectedProduct,
+                        initialValue: _selectedProduct,
                         decoration: InputDecoration(
                           hintText: 'Chọn sản phẩm',
                           prefixIcon: const Icon(Icons.inventory_2_outlined),
@@ -964,7 +966,7 @@ class CreateJobDialogState extends State<CreateJobDialog> {
 
                       // Quantity
                       const Text(
-                        'Sản lượng bốc xếp',
+                        'Sản lượng',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
@@ -989,13 +991,17 @@ class CreateJobDialogState extends State<CreateJobDialog> {
 
                       // Unit Price
                       const Text(
-                        'Đơn giá bốc xếp (VNĐ)',
+                        'Đơn giá (VNĐ)',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _priceController,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          ThousandsSeparatorInputFormatter(),
+                        ],
                         decoration: InputDecoration(
                           hintText: 'VD: 900000',
                           prefixIcon: const Icon(Icons.sell_outlined),
@@ -1006,7 +1012,7 @@ class CreateJobDialogState extends State<CreateJobDialog> {
                         onChanged: (_) => setState(() {}),
                         validator: (val) {
                           if (val == null || val.isEmpty) return 'Vui lòng nhập đơn giá';
-                          if (int.tryParse(val) == null) return 'Đơn giá phải là số nguyên';
+                          if (val.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Đơn giá phải là số nguyên';
                           return null;
                         },
                       ),
@@ -1026,7 +1032,7 @@ class CreateJobDialogState extends State<CreateJobDialog> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('TỔNG TIỀN BỐC XẾP', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                                const Text('TỔNG TIỀN', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
                                 Text(
                                   currencyFormat.format(_calculatedTotal),

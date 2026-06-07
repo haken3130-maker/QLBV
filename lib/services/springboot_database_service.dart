@@ -57,6 +57,9 @@ class SpringBootDatabaseService implements IDatabaseService {
   SpringBootDatabaseService() {
     // Helpful debug: print effective base URL when service constructed
     debugPrint('SpringBootDatabaseService baseUrl=$_baseUrl');
+    if (!_baseUrl.startsWith('https://')) {
+      throw StateError('SpringBootDatabaseService requires HTTPS base URL.');
+    }
     // Add Interceptor to automatically append JWT bearer token to requests
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
@@ -228,6 +231,15 @@ class SpringBootDatabaseService implements IDatabaseService {
     await _refreshEmployees();
   }
 
+  @override
+  Future<void> deleteEmployee(String employeeId) async {
+    await _dio.delete('/api/employees/$employeeId');
+    await _refreshEmployees();
+    await _refreshSalaries();
+    _refreshJobs();
+    _refreshAuditLogs();
+  }
+
   // --- Product operations ---
 
   Future<void> _refreshProducts() async {
@@ -266,6 +278,12 @@ class SpringBootDatabaseService implements IDatabaseService {
   @override
   Future<void> updateProduct(Product product) async {
     await _dio.put('/api/products/${product.id}', data: product.toMap());
+    await _refreshProducts();
+  }
+
+  @override
+  Future<void> deleteProduct(String productId) async {
+    await _dio.delete('/api/products/$productId');
     await _refreshProducts();
   }
 

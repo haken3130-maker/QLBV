@@ -211,6 +211,19 @@ class SalaryProvider extends ChangeNotifier {
     await _repository.updateProduct(updated);
   }
 
+  Future<void> updateProduct(Product product, String newName, int newPrice) async {
+    final updated = product.copyWith(name: newName, defaultPrice: newPrice);
+    await _repository.updateProduct(updated);
+  }
+
+  Future<void> deleteProduct(String productId) async {
+    await _repository.deleteProduct(productId);
+  }
+
+  Future<void> deleteEmployee(String employeeId) async {
+    await _repository.deleteEmployee(employeeId);
+  }
+
   Future<void> createJob({
     required DateTime date,
     required Product product,
@@ -223,8 +236,9 @@ class SalaryProvider extends ChangeNotifier {
     final totalAmount = (quantity * unitPrice).round();
     final numParticipants = participantIds.length;
 
-    if (numParticipants == 0)
+    if (numParticipants == 0) {
       throw Exception('Phải chọn ít nhất 1 người tham gia.');
+    }
 
     final baseSplit = totalAmount ~/ numParticipants;
     final remainder = totalAmount % numParticipants;
@@ -283,8 +297,9 @@ class SalaryProvider extends ChangeNotifier {
   }) async {
     final totalAmount = (quantity * unitPrice).round();
     final numParticipants = participantIds.length;
-    if (numParticipants == 0)
+    if (numParticipants == 0) {
       throw Exception('Phải chọn ít nhất 1 người tham gia.');
+    }
 
     final baseSplit = totalAmount ~/ numParticipants;
     final remainder = totalAmount % numParticipants;

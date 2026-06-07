@@ -41,6 +41,10 @@ class SalaryRepository implements IDatabaseService {
       _activeService.updateEmployee(employee);
 
   @override
+  Future<void> deleteEmployee(String employeeId) =>
+      _activeService.deleteEmployee(employeeId);
+
+  @override
   Stream<List<Product>> streamProducts() => _activeService.streamProducts();
 
   @override
@@ -50,6 +54,10 @@ class SalaryRepository implements IDatabaseService {
   @override
   Future<void> updateProduct(Product product) =>
       _activeService.updateProduct(product);
+
+  @override
+  Future<void> deleteProduct(String productId) =>
+      _activeService.deleteProduct(productId);
 
   @override
   Stream<List<Job>> streamJobs() => _activeService.streamJobs();

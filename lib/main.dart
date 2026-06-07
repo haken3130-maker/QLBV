@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TabNotifier()),
       ],
       child: MaterialApp(
-        title: 'Quản Lý Lương Bốc Vác',
+        title: 'Quản Lý Lương',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const AuthGate(),

@@ -104,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   const Center(
                     child: Text(
-                      'QUẢN LÝ LƯƠNG ĐỘI BỐC VÁC',
+                      'QUẢN LÝ LƯƠNG',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 20,

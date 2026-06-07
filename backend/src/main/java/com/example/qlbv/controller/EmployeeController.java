@@ -2,9 +2,13 @@ package com.example.qlbv.controller;
 
 import com.example.qlbv.entity.Employee;
 import com.example.qlbv.repository.EmployeeRepository;
+import com.example.qlbv.repository.SalaryEntryRepository;
+import com.example.qlbv.repository.SalaryPaymentRepository;
+import com.example.qlbv.service.AuditLogService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +19,15 @@ import java.util.List;
 public class EmployeeController {
     @Autowired
     private EmployeeRepository employeeRepository;
+
+    @Autowired
+    private SalaryEntryRepository salaryEntryRepository;
+
+    @Autowired
+    private SalaryPaymentRepository salaryPaymentRepository;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     @GetMapping
     public List<Employee> getAllEmployees() {
@@ -40,6 +53,21 @@ public class EmployeeController {
                     employee.setJoinDate(employeeDetails.getJoinDate());
                     Employee updated = employeeRepository.save(employee);
                     return ResponseEntity.ok(updated);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteEmployee(@PathVariable String id) {
+        return employeeRepository.findById(id)
+                .map(employee -> {
+                    salaryEntryRepository.deleteByEmployeeId(id);
+                    salaryPaymentRepository.deleteByEmployeeId(id);
+                    employeeRepository.deleteById(id);
+                    auditLogService.log("DELETE_EMPLOYEE", "EMPLOYEE", id,
+                            String.format("Xóa nhân viên: %s", employee.getName()), null, null);
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

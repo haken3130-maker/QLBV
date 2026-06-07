@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext traffic for local device testing and development. -->
-    <base-config cleartextTrafficPermitted="true" />
+    <!-- Enforce HTTPS and disallow cleartext traffic. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">qlbv-9542.onrender.com</domain>
+    </domain-config>
 </network-security-config>
