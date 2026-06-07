@@ -65,9 +65,9 @@ public class AuthController {
                 .map(user -> {
                     String token = jwtUtils.generateTokenFromUsername(user.getEmail());
                     RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getUid());
-                    return ResponseEntity.ok(new TokenRefreshResponse(token, newRefreshToken.getToken()));
+                    return ResponseEntity.<Object>ok(new TokenRefreshResponse(token, newRefreshToken.getToken()));
                 })
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .orElseGet(() -> ResponseEntity.<Object>status(HttpStatus.FORBIDDEN)
                         .body(new MessageResponse("Refresh token không hợp lệ!")));
     }
 
