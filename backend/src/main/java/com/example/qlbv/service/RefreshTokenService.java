@@ -29,6 +29,7 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
 
+    @Transactional
     public RefreshToken createRefreshToken(String userId) {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh token creation"));

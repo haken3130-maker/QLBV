@@ -83,7 +83,8 @@ public class WebSecurityConfig {
                 System.out.println("  - anyRequest → authenticated()");
                 
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/api/auth/**", "/health").permitAll()
+                    .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/health").permitAll()
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated();
             });
