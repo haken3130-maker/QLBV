@@ -75,7 +75,9 @@ class SpringBootDatabaseService implements IDatabaseService {
             debugPrint('Request body: ${options.data}');
           } catch (_) {}
         }
-        if (_token != null) {
+        // Allow certain calls (e.g. token refresh) to opt-out of automatic
+        // Authorization header injection by setting `options.extra['skipAuth'] = true`.
+        if (options.extra['skipAuth'] != true && _token != null) {
           options.headers['Authorization'] = 'Bearer $_token';
         }
         final authHeader = options.headers['Authorization'];
@@ -167,9 +169,15 @@ class SpringBootDatabaseService implements IDatabaseService {
 
     _refreshCompleter = Completer<void>();
     try {
-      final response = await _dio.post('/api/auth/refresh', data: {
-        'refreshToken': _refreshToken,
-      });
+      // Ensure we do NOT send the current (possibly expired) access token
+      // when calling the refresh endpoint by using the `skipAuth` flag.
+      final response = await _dio.post(
+        '/api/auth/refresh',
+        data: {
+          'refreshToken': _refreshToken,
+        },
+        options: Options(extra: {'skipAuth': true}),
+      );
 
       if (response.statusCode == 200 && response.data != null) {
         _token = response.data['token'] as String?;
