@@ -30,12 +30,17 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String path = request.getServletPath();
+        String method = request.getMethod();
+        logger.info("=== [AuthTokenFilter] Request: {} {}", method, path);
+        
         if (isPublicPath(path)) {
-            logger.debug("Public path, skipping JWT filter: {}", path);
+            logger.info("[AuthTokenFilter] PUBLIC path detected, skipping JWT validation: {}", path);
             filterChain.doFilter(request, response);
             return;
         }
 
+        logger.info("[AuthTokenFilter] PROTECTED path, checking JWT: {}", path);
+        
         try {
             String jwt = parseJwt(request);
             if (jwt != null) {

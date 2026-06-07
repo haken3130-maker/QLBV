@@ -66,6 +66,7 @@ public class WebSecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        System.out.println("=== [WebSecurityConfig] Configuring security filter chain ===");
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exception -> exception
@@ -73,15 +74,23 @@ public class WebSecurityConfig {
                 .accessDeniedHandler(accessDeniedHandler())
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> 
+            .authorizeHttpRequests(auth -> {
+                System.out.println("[WebSecurityConfig] Setting up authorization rules:");
+                System.out.println("  - OPTIONS /** → permitAll");
+                System.out.println("  - /api/auth/** → permitAll");
+                System.out.println("  - /health → permitAll");
+                System.out.println("  - /api/admin/** → hasRole('ADMIN')");
+                System.out.println("  - anyRequest → authenticated()");
+                
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/api/auth/**", "/health").permitAll()
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                    .anyRequest().authenticated()
-            );
+                    .anyRequest().authenticated();
+            });
         
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        System.out.println("=== [WebSecurityConfig] Security filter chain configured ===");
         
         return http.build();
     }
