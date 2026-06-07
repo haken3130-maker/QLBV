@@ -77,29 +77,41 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void createOrUpdateUser(AppUser user) {
-        appUserRepository.findByEmail(user.getEmail()).ifPresentOrElse(
-                existing -> {
-                    boolean changed = false;
-                    if (!existing.getName().equals(user.getName())) {
-                        existing.setName(user.getName());
-                        changed = true;
+        try {
+            System.out.println("[DatabaseSeeder.createOrUpdateUser] Searching for user: " + user.getEmail());
+            
+            appUserRepository.findByEmail(user.getEmail()).ifPresentOrElse(
+                    existing -> {
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] User already exists: " + existing.getEmail() + ", ID: " + existing.getUid());
+                        boolean changed = false;
+                        if (!existing.getName().equals(user.getName())) {
+                            existing.setName(user.getName());
+                            changed = true;
+                        }
+                        if (!existing.getRole().equals(user.getRole())) {
+                            existing.setRole(user.getRole());
+                            changed = true;
+                        }
+                        if (!existing.getPassword().equals(user.getPassword())) {
+                            existing.setPassword(user.getPassword());
+                            changed = true;
+                        }
+                        if (changed) {
+                            appUserRepository.save(existing);
+                            System.out.println("[DatabaseSeeder.createOrUpdateUser] User updated: " + existing.getEmail());
+                        } else {
+                            System.out.println("[DatabaseSeeder.createOrUpdateUser] User already exists with correct data: " + existing.getEmail());
+                        }
+                    },
+                    () -> {
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] Creating new user: " + user.getEmail());
+                        AppUser saved = appUserRepository.save(user);
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] User created successfully: " + saved.getEmail() + ", ID: " + saved.getUid());
                     }
-                    if (!existing.getRole().equals(user.getRole())) {
-                        existing.setRole(user.getRole());
-                        changed = true;
-                    }
-                    if (!existing.getPassword().equals(user.getPassword())) {
-                        existing.setPassword(user.getPassword());
-                        changed = true;
-                    }
-                    if (changed) {
-                        appUserRepository.save(existing);
-                        System.out.println("User updated: " + existing.getEmail());
-                    } else {
-                        System.out.println("User already exists: " + existing.getEmail());
-                    }
-                },
-                () -> appUserRepository.save(user)
-        );
+            );
+        } catch (Exception e) {
+            System.err.println("[DatabaseSeeder.createOrUpdateUser] ERROR creating/updating user " + user.getEmail() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

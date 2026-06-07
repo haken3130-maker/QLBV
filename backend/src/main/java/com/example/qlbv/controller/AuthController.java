@@ -30,29 +30,41 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        try {
+            System.out.println("[AuthController.login] Login attempt: email=" + loginRequest.getEmail());
+            
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
+            System.out.println("[AuthController.login] Authentication successful for: " + loginRequest.getEmail());
+            
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = jwtUtils.generateJwtToken(authentication);
+            
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            System.out.println("[AuthController.login] User details: uid=" + userDetails.getUid() + ", email=" + userDetails.getEmail());
+            
+            String role = userDetails.getAuthorities().stream()
+                    .findFirst()
+                    .map(item -> item.getAuthority().replace("ROLE_", "").toLowerCase())
+                    .orElse("leader");
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = jwtUtils.generateJwtToken(authentication);
-        
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();        
-        String role = userDetails.getAuthorities().stream()
-                .findFirst()
-                .map(item -> item.getAuthority().replace("ROLE_", "").toLowerCase())
-                .orElse("leader");
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getUid());
+            System.out.println("[AuthController.login] Refresh token created successfully");
 
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getUid());
-
-        return ResponseEntity.ok(new JwtResponse(
-                jwt,
-                refreshToken.getToken(),
-                userDetails.getUid(),
-                userDetails.getEmail(),
-                userDetails.getUsername(), // In our impl, username is email
-                role
-        ));
+            return ResponseEntity.ok(new JwtResponse(
+                    jwt,
+                    refreshToken.getToken(),
+                    userDetails.getUid(),
+                    userDetails.getEmail(),
+                    userDetails.getUsername(),
+                    role
+            ));
+        } catch (Exception e) {
+            System.err.println("[AuthController.login] Login failed: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     @PostMapping("/refresh")
