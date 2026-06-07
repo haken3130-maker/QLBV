@@ -60,7 +60,7 @@ public class DatabaseSeeder implements CommandLineRunner {
         createOrUpdateUser(AppUser.builder()
                 .uid("thanhnhan_uid")
                 .email("thanhnhan@qlbv.com")
-                .password(passwordEncoder.encode("thanhnha123"))
+                .password(passwordEncoder.encode("thanhnhan123"))
                 .name("Thanh Nhân")
                 .role("admin")
                 .build());
