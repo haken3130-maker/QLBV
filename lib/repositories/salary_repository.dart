@@ -13,7 +13,7 @@ class SalaryRepository implements IDatabaseService {
   factory SalaryRepository() => _instance;
   SalaryRepository._internal();
 
-  final IDatabaseService _activeService = SpringBootDatabaseService();
+  late final IDatabaseService _activeService = SpringBootDatabaseService();
 
   @override
   String get name => _activeService.name;

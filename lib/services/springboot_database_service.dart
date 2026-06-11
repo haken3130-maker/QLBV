@@ -12,6 +12,112 @@ import '../models/salary_payment.dart';
 import '../models/audit_log.dart';
 
 class SpringBootDatabaseService implements IDatabaseService {
+  // ── Singleton: đảm bảo chỉ có MỘT Dio instance duy nhất với MỘT bộ interceptors ──
+  static final SpringBootDatabaseService _instance =
+      SpringBootDatabaseService._internal();
+
+  factory SpringBootDatabaseService() => _instance;
+
+  SpringBootDatabaseService._internal() {
+    debugPrint('SpringBootDatabaseService baseUrl=$_baseUrl');
+    if (!_baseUrl.startsWith('https://')) {
+      debugPrint(
+        '[SpringBootDatabaseService] WARNING: Running with non-HTTPS URL: $_baseUrl. '
+        'This is only acceptable in dev/emulator environments.',
+      );
+    }
+    // Add Interceptor to automatically append JWT bearer token to requests
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final path = '${options.baseUrl}${options.path}';
+          debugPrint('[onRequest] ===== OUTGOING REQUEST =====');
+          debugPrint('[onRequest] ${options.method} $path');
+          debugPrint('[onRequest] skipAuth flag: ${options.extra['skipAuth']}');
+          debugPrint(
+            '[onRequest] Current token: ${_token != null ? 'Bearer ${_token!.substring(0, 10)}...' : 'NULL'}',
+          );
+
+          if (options.data != null) {
+            try {
+              debugPrint('[onRequest] Request body: ${options.data}');
+            } catch (_) {}
+          }
+
+          // Allow certain calls (e.g. token refresh) to opt-out of automatic
+          // Authorization header injection by setting options.extra['skipAuth'] = true.
+          if (options.extra['skipAuth'] != true && _token != null) {
+            options.headers['Authorization'] = 'Bearer $_token';
+            debugPrint('[onRequest] Authorization header INJECTED');
+          } else if (options.extra['skipAuth'] == true) {
+            debugPrint('[onRequest] Authorization header SKIPPED (skipAuth=true)');
+          } else if (_token == null) {
+            debugPrint('[onRequest] Authorization header SKIPPED (token is null)');
+          }
+
+          final authHeader = options.headers['Authorization'];
+          debugPrint('[onRequest] Authorization header present: ${authHeader != null}');
+          if (authHeader != null) {
+            debugPrint('[onRequest] Authorization header: Bearer ****');
+          }
+          debugPrint('[onRequest] ===========================');
+          return handler.next(options);
+        },
+        onResponse: (response, handler) {
+          // Log responses for easier remote debugging
+          try {
+            debugPrint(
+              'API Response: ${response.statusCode} ${response.requestOptions.path} -> ${response.data}',
+            );
+          } catch (_) {}
+          return handler.next(response);
+        },
+        onError: (e, handler) async {
+          try {
+            final opts = e.requestOptions;
+            debugPrint(
+              'SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message} - '
+              '${opts.method} ${opts.path} '
+              '(receiveTimeout=${opts.receiveTimeout ?? 'default'}, connectTimeout=${opts.connectTimeout ?? 'default'})',
+            );
+            if (e.response?.data != null) {
+              debugPrint('Error response body: ${e.response?.data}');
+            }
+
+            if (e.response?.statusCode == 401 &&
+                opts.path != '/api/auth/login' &&
+                opts.path != '/api/auth/refresh' &&
+                opts.extra['retried'] != true) {
+              try {
+                debugPrint('[onError] Attempting refresh for 401 error');
+                debugPrint(
+                  '[onError] Current _refreshToken: ${_refreshToken != null ? 'present' : 'NULL'}',
+                );
+                await _refreshAccessToken();
+                opts.extra['retried'] = true;
+                final response = await _dio.fetch(opts);
+                return handler.resolve(response);
+              } catch (refreshError) {
+                debugPrint('Refresh token failed: $refreshError');
+                // If refresh fails, log out user since tokens are invalid
+                _token = null;
+                _refreshToken = null;
+                _cachedUser = null;
+              }
+            }
+          } catch (_) {
+            debugPrint(
+              'SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}',
+            );
+          }
+          return handler.next(e);
+        },
+      ),
+    );
+  }
+
+  // ── Fields ─────────────────────────────────────────────────────────────────
+
   @override
   String get name => 'Spring Boot';
 
@@ -20,16 +126,19 @@ class SpringBootDatabaseService implements IDatabaseService {
     if (defineUrl.isNotEmpty) {
       return defineUrl;
     }
-    return 'https://qlbv-9542.onrender.com';
+    // Local backend on emulator: use 10.0.2.2 to reach host localhost
+    return 'http://10.0.2.2:10000';
   }
 
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
-    connectTimeout: const Duration(seconds: 60),
-    receiveTimeout: const Duration(seconds: 180),
-    // increase send timeout as some endpoints may be slow
-    sendTimeout: const Duration(seconds: 60),
-  ));
+  final Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: _baseUrl,
+      connectTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 180),
+      // increase send timeout as some endpoints may be slow
+      sendTimeout: const Duration(seconds: 60),
+    ),
+  );
 
   static String? _token;
   static String? _refreshToken;
@@ -39,18 +148,6 @@ class SpringBootDatabaseService implements IDatabaseService {
   static String? get token => _token;
   static String? get refreshToken => _refreshToken;
 
-  static void restoreSession(String token, String? refreshToken, AppUser user) {
-    _token = token;
-    _refreshToken = refreshToken;
-    _cachedUser = user;
-    final service = SpringBootDatabaseService();
-    service._refreshEmployees();
-    service._refreshProducts();
-    service._refreshJobs();
-    service._refreshSalaries();
-    service._refreshAuditLogs();
-  }
-
   // StreamControllers to publish reactive updates
   final _employeeStreamController = StreamController<List<Employee>>.broadcast();
   final _productStreamController = StreamController<List<Product>>.broadcast();
@@ -59,86 +156,28 @@ class SpringBootDatabaseService implements IDatabaseService {
   final _salaryPaymentStreamController = StreamController<List<SalaryPayment>>.broadcast();
   final _auditLogStreamController = StreamController<List<AuditLog>>.broadcast();
 
-  SpringBootDatabaseService() {
-    // Helpful debug: print effective base URL when service constructed
-    debugPrint('SpringBootDatabaseService baseUrl=$_baseUrl');
-    if (!_baseUrl.startsWith('https://')) {
-      throw StateError('SpringBootDatabaseService requires HTTPS base URL.');
-    }
-    // Add Interceptor to automatically append JWT bearer token to requests
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        // Log outgoing requests in debug builds
-        final path = '${options.baseUrl}${options.path}';
-        debugPrint('[onRequest] ===== OUTGOING REQUEST =====');
-        debugPrint('[onRequest] ${options.method} $path');
-        debugPrint('[onRequest] skipAuth flag: ${options.extra['skipAuth']}');
-        debugPrint('[onRequest] Current token: ${_token != null ? 'Bearer ${_token!.substring(0, 10)}...' : 'NULL'}');
-        
-        if (options.data != null) {
-          try {
-            debugPrint('[onRequest] Request body: ${options.data}');
-          } catch (_) {}
-        }
-        
-        // Allow certain calls (e.g. token refresh) to opt-out of automatic
-        // Authorization header injection by setting `options.extra['skipAuth'] = true`.
-        if (options.extra['skipAuth'] != true && _token != null) {
-          options.headers['Authorization'] = 'Bearer $_token';
-          debugPrint('[onRequest] Authorization header INJECTED');
-        } else if (options.extra['skipAuth'] == true) {
-          debugPrint('[onRequest] Authorization header SKIPPED (skipAuth=true)');
-        } else if (_token == null) {
-          debugPrint('[onRequest] Authorization header SKIPPED (token is null)');
-        }
-        
-        final authHeader = options.headers['Authorization'];
-        debugPrint('[onRequest] Authorization header present: ${authHeader != null}');
-        if (authHeader != null) {
-          debugPrint('[onRequest] Authorization header: Bearer ****');
-        }
-        debugPrint('[onRequest] ===========================');
-        return handler.next(options);
-      },
-      onResponse: (response, handler) {
-        // Log responses for easier remote debugging
-        try {
-          debugPrint('API Response: ${response.statusCode} ${response.requestOptions.path} -> ${response.data}');
-        } catch (_) {}
-        return handler.next(response);
-      },
-      onError: (e, handler) async {
-        try {
-          final opts = e.requestOptions;
-          debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message} - ${opts.method} ${opts.path} (receiveTimeout=${opts.receiveTimeout ?? 'default'}, connectTimeout=${opts.connectTimeout ?? 'default'})');
-          if (e.response?.data != null) {
-            debugPrint('Error response body: ${e.response?.data}');
-          }
+  // ── Session management ─────────────────────────────────────────────────────
 
-          if (e.response?.statusCode == 401 &&
-              opts.path != '/api/auth/login' &&
-              opts.path != '/api/auth/refresh' &&
-              opts.extra['retried'] != true) {
-            try {
-              await _refreshAccessToken();
-              opts.extra['retried'] = true;
-              final response = await _dio.fetch(opts);
-              return handler.resolve(response);
-            } catch (refreshError) {
-              debugPrint('Refresh token failed: $refreshError');
-              // If refresh fails, log out user since tokens are invalid
-              _token = null;
-              _refreshToken = null;
-              _cachedUser = null;
-            }
-          }
-        } catch (_) {
-          debugPrint('SpringBootDatabaseService API Error: ${e.response?.statusCode} - ${e.message}');
-        }
-        return handler.next(e);
-      }
-    ));
+  static void restoreSession(String token, String? refreshToken, AppUser user) {
+    debugPrint('[restoreSession] Restoring session for user: ${user.email}');
+    debugPrint('[restoreSession] Token: ${token.substring(0, 20)}...');
+    debugPrint(
+      '[restoreSession] RefreshToken: ${refreshToken != null ? '${refreshToken.substring(0, 20)}...' : 'NULL'}',
+    );
+
+    _token = token;
+    _refreshToken = refreshToken;
+    _cachedUser = user;
+    // Dùng singleton instance — tránh tạo Dio thứ hai với interceptor riêng biệt
+    final service = SpringBootDatabaseService();
+    service._refreshEmployees();
+    service._refreshProducts();
+    service._refreshJobs();
+    service._refreshSalaries();
+    service._refreshAuditLogs();
   }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   // Simple GET with retry/backoff to handle slow server responses during startup sync.
   Future<Response> _getWithRetry(String path, {int attempts = 3}) async {
@@ -146,7 +185,10 @@ class SpringBootDatabaseService implements IDatabaseService {
     while (true) {
       attempt++;
       try {
-          final resp = await _dio.get(path, options: Options(receiveTimeout: const Duration(seconds: 180)));
+        final resp = await _dio.get(
+          path,
+          options: Options(receiveTimeout: const Duration(seconds: 180)),
+        );
         return resp;
       } on DioException catch (e) {
         if (attempt >= attempts) rethrow;
@@ -155,7 +197,9 @@ class SpringBootDatabaseService implements IDatabaseService {
             e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.unknown) {
           final backoff = Duration(seconds: 1 << (attempt)); // 2,4,8...
-          debugPrint('Retry $_getWithRetry: attempt $attempt for $path after $backoff due to ${e.type}');
+          debugPrint(
+            'Retry _getWithRetry: attempt $attempt for $path after $backoff due to ${e.type}',
+          );
           await Future.delayed(backoff);
           continue;
         }
@@ -180,6 +224,10 @@ class SpringBootDatabaseService implements IDatabaseService {
       throw Exception('Không có refresh token để làm mới phiên.');
     }
 
+    debugPrint(
+      '[_refreshAccessToken] Attempting to refresh with token: ${_refreshToken!.substring(0, 20)}...',
+    );
+
     if (_refreshCompleter != null) {
       return _refreshCompleter!.future;
     }
@@ -187,14 +235,18 @@ class SpringBootDatabaseService implements IDatabaseService {
     _refreshCompleter = Completer<void>();
     try {
       // Ensure we do NOT send the current (possibly expired) access token
-      // when calling the refresh endpoint by using the `skipAuth` flag.
+      // when calling the refresh endpoint by using the skipAuth flag.
+      final requestBody = {'refreshToken': _refreshToken};
+
+      debugPrint('[_refreshAccessToken] Request body: $requestBody');
+
       final response = await _dio.post(
         '/api/auth/refresh',
-        data: {
-          'refreshToken': _refreshToken,
-        },
+        data: requestBody,
         options: Options(extra: {'skipAuth': true}),
       );
+
+      debugPrint('[_refreshAccessToken] Response: ${response.statusCode} - ${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         _token = response.data['token'] as String?;
@@ -203,9 +255,11 @@ class SpringBootDatabaseService implements IDatabaseService {
         final prefs = await SharedPreferences.getInstance();
         if (_token != null) {
           await prefs.setString('auth_token', _token!);
+          debugPrint('[_refreshAccessToken] New token saved');
         }
         if (_refreshToken != null) {
           await prefs.setString('auth_refresh_token', _refreshToken!);
+          debugPrint('[_refreshAccessToken] New refresh token saved');
         }
 
         _refreshCompleter!.complete();
@@ -214,6 +268,7 @@ class SpringBootDatabaseService implements IDatabaseService {
 
       throw Exception('Không thể làm mới token.');
     } catch (e) {
+      debugPrint('[_refreshAccessToken] Error: $e');
       _refreshCompleter!.completeError(e);
       rethrow;
     } finally {
@@ -225,14 +280,17 @@ class SpringBootDatabaseService implements IDatabaseService {
     final statusCode = e.response?.statusCode;
     if (statusCode != null) {
       if (statusCode == 401) {
-        return Exception('Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.');
+        return Exception(
+          'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.',
+        );
       }
       if (statusCode == 403) {
         return Exception('Bạn không có quyền thực hiện thao tác này.');
       }
       if (e.response?.data is Map) {
         final responseData = e.response?.data as Map;
-        final errorMessage = responseData['error'] ?? responseData['message'] ?? responseData['detail'];
+        final errorMessage =
+            responseData['error'] ?? responseData['message'] ?? responseData['detail'];
         if (errorMessage is String && errorMessage.isNotEmpty) {
           return Exception(errorMessage);
         }
@@ -249,7 +307,7 @@ class SpringBootDatabaseService implements IDatabaseService {
     return Exception(fallbackMessage);
   }
 
-  // --- Auth operations ---
+  // ── Auth operations ────────────────────────────────────────────────────────
 
   @override
   Future<AppUser?> signIn(String email, String password) async {
@@ -266,7 +324,7 @@ class SpringBootDatabaseService implements IDatabaseService {
         final data = response.data;
         _token = data['token'];
         _refreshToken = data['refreshToken'];
-        
+
         final user = AppUser(
           uid: data['uid'] ?? '',
           email: data['email'] ?? '',
@@ -275,7 +333,7 @@ class SpringBootDatabaseService implements IDatabaseService {
         );
 
         _cachedUser = user;
-        
+
         // Trigger initial data pre-fetches
         _refreshEmployees();
         _refreshProducts();
@@ -309,15 +367,16 @@ class SpringBootDatabaseService implements IDatabaseService {
     return _cachedUser;
   }
 
-  // --- Employee operations ---
+  // ── Employee operations ────────────────────────────────────────────────────
 
   Future<void> _refreshEmployees() async {
     try {
       final response = await _getWithRetry('/api/employees');
       if (response.statusCode == 200) {
-        final list = (response.data as List)
-            .map((item) => Employee.fromMap(item, item['id']?.toString() ?? ''))
-            .toList();
+        final list =
+            (response.data as List)
+                .map((item) => Employee.fromMap(item, item['id']?.toString() ?? ''))
+                .toList();
         _employeeStreamController.add(list);
         return;
       }
@@ -337,10 +396,7 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   @override
   Future<void> addEmployee(Employee employee) async {
-    await _dio.post('/api/employees', data: {
-      'id': employee.id,
-      ...employee.toMap(),
-    });
+    await _dio.post('/api/employees', data: {'id': employee.id, ...employee.toMap()});
     await _refreshEmployees();
   }
 
@@ -364,15 +420,14 @@ class SpringBootDatabaseService implements IDatabaseService {
     _refreshAuditLogs();
   }
 
-  // --- Product operations ---
+  // ── Product operations ─────────────────────────────────────────────────────
 
   Future<void> _refreshProducts() async {
     try {
       final response = await _getWithRetry('/api/products');
       if (response.statusCode == 200) {
-        final list = (response.data as List)
-            .map((item) => Product.fromMap(item, item['id']))
-            .toList();
+        final list =
+            (response.data as List).map((item) => Product.fromMap(item, item['id'])).toList();
         _productStreamController.add(list);
         return;
       }
@@ -392,10 +447,7 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   @override
   Future<void> addProduct(Product product) async {
-    await _dio.post('/api/products', data: {
-      'id': product.id,
-      ...product.toMap(),
-    });
+    await _dio.post('/api/products', data: {'id': product.id, ...product.toMap()});
     await _refreshProducts();
   }
 
@@ -416,15 +468,14 @@ class SpringBootDatabaseService implements IDatabaseService {
     await _refreshProducts();
   }
 
-  // --- Job operations ---
+  // ── Job operations ─────────────────────────────────────────────────────────
 
   Future<void> _refreshJobs() async {
     try {
       final response = await _getWithRetry('/api/jobs');
       if (response.statusCode == 200) {
-        final list = (response.data as List)
-            .map((item) => Job.fromMap(item, item['id']))
-            .toList();
+        final list =
+            (response.data as List).map((item) => Job.fromMap(item, item['id'])).toList();
         _jobStreamController.add(list);
         return;
       }
@@ -461,14 +512,18 @@ class SpringBootDatabaseService implements IDatabaseService {
     debugPrint('SpringBootDatabaseService.createJob payload: $payload');
     try {
       final response = await _dio.post('/api/jobs', data: payload);
-      debugPrint('SpringBootDatabaseService.createJob response: ${response.statusCode} - ${response.data}');
-      
+      debugPrint(
+        'SpringBootDatabaseService.createJob response: ${response.statusCode} - ${response.data}',
+      );
+
       if (response.statusCode != 200) {
         final errorMsg = response.data is Map ? response.data['error'] : 'Lỗi không xác định';
         throw Exception(errorMsg ?? 'Tạo công việc thất bại');
       }
     } on DioException catch (e) {
-      debugPrint('SpringBootDatabaseService.createJob DioException: ${e.response?.statusCode} - ${e.response?.data} - ${e.message}');
+      debugPrint(
+        'SpringBootDatabaseService.createJob DioException: ${e.response?.statusCode} - ${e.response?.data} - ${e.message}',
+      );
       String msg = 'Tạo công việc thất bại!';
       if (e.response?.data is Map && e.response?.data['error'] != null) {
         msg = e.response!.data['error'];
@@ -522,16 +577,17 @@ class SpringBootDatabaseService implements IDatabaseService {
     _refreshAuditLogs();
   }
 
-  // --- Salary operations ---
+  // ── Salary operations ──────────────────────────────────────────────────────
 
   Future<void> _refreshSalaries() async {
     var entriesEmitted = false;
     try {
       final responseEntries = await _getWithRetry('/api/salaries/entries');
       if (responseEntries.statusCode == 200) {
-        final list = (responseEntries.data as List)
-            .map((item) => SalaryEntry.fromMap(item, item['id']))
-            .toList();
+        final list =
+            (responseEntries.data as List)
+                .map((item) => SalaryEntry.fromMap(item, item['id']))
+                .toList();
         _salaryEntryStreamController.add(list);
         entriesEmitted = true;
       }
@@ -546,9 +602,10 @@ class SpringBootDatabaseService implements IDatabaseService {
     try {
       final responsePayments = await _getWithRetry('/api/salaries/payments');
       if (responsePayments.statusCode == 200) {
-        final list = (responsePayments.data as List)
-            .map((item) => SalaryPayment.fromMap(item, item['id']))
-            .toList();
+        final list =
+            (responsePayments.data as List)
+                .map((item) => SalaryPayment.fromMap(item, item['id']))
+                .toList();
         _salaryPaymentStreamController.add(list);
         paymentsEmitted = true;
       }
@@ -566,7 +623,7 @@ class SpringBootDatabaseService implements IDatabaseService {
     return _salaryEntryStreamController.stream;
   }
 
-  // --- Salary Payment operations ---
+  // ── Salary Payment operations ──────────────────────────────────────────────
 
   @override
   Stream<List<SalaryPayment>> streamSalaryPayments() {
@@ -597,14 +654,15 @@ class SpringBootDatabaseService implements IDatabaseService {
     _refreshAuditLogs();
   }
 
+  // ── Audit Log operations ───────────────────────────────────────────────────
+
   Future<void> _refreshAuditLogs() async {
     if (_cachedUser?.role != 'admin') return;
     try {
       final response = await _getWithRetry('/api/audit-logs');
       if (response.statusCode == 200) {
-        final list = (response.data as List)
-            .map((item) => AuditLog.fromMap(item, item['id']))
-            .toList();
+        final list =
+            (response.data as List).map((item) => AuditLog.fromMap(item, item['id'])).toList();
         _auditLogStreamController.add(list);
         return;
       }

@@ -1,16 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
 import 'providers/salary_provider.dart';
 import 'providers/tab_notifier.dart';
+import 'services/springboot_database_service.dart';
+import 'models/app_user.dart';
 import 'ui/theme.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/main_navigation_screen.dart';
 
+Future<void> _initializeAuth() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token');
+  final refreshToken = prefs.getString('auth_refresh_token');
+  final uid = prefs.getString('auth_user_uid');
+  final email = prefs.getString('auth_user_email');
+  final name = prefs.getString('auth_user_name');
+  final role = prefs.getString('auth_user_role');
+
+  print('[_initializeAuth] token: ${token != null ? token.substring(0, 20) + '...' : 'NULL'}');
+  print('[_initializeAuth] refreshToken: ${refreshToken != null ? refreshToken.substring(0, 20) + '...' : 'NULL'}');
+  print('[_initializeAuth] uid: $uid, email: $email');
+
+  if (token != null && 
+      token.isNotEmpty && 
+      refreshToken != null && 
+      refreshToken.isNotEmpty && 
+      uid != null && 
+      uid.isNotEmpty && 
+      email != null && 
+      name != null && 
+      role != null) {
+    // Restore session BEFORE any repositories are created
+    final user = AppUser(uid: uid, email: email, name: name, role: role);
+    print('[_initializeAuth] Restoring session for user: $email');
+    SpringBootDatabaseService.restoreSession(token, refreshToken, user);
+  } else {
+    print('[_initializeAuth] No saved session found or incomplete data');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('vi', null);
+  await _initializeAuth(); // Restore session before creating app
   runApp(const MyApp());
 }
 

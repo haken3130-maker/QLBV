@@ -5,7 +5,7 @@ import '../repositories/salary_repository.dart';
 import '../services/springboot_database_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final SalaryRepository _repository = SalaryRepository();
+  late final SalaryRepository _repository;
   
   AppUser? _currentUser;
   bool _isLoading = false;
@@ -20,6 +20,11 @@ class AuthProvider extends ChangeNotifier {
   bool get isAdmin => _currentUser?.role == 'admin';
   bool get isLeader => _currentUser?.role == 'leader' || isAdmin;
 
+  AuthProvider() {
+    // Initialize repository after this provider is created
+    _repository = SalaryRepository();
+  }
+
   Future<bool> login(String email, String password) async {
     _isLoading = true;
     _errorMessage = null;
@@ -28,9 +33,29 @@ class AuthProvider extends ChangeNotifier {
     try {
       final user = await _repository.signIn(email, password);
       _currentUser = user;
+      
+      print('[AuthProvider.login] After signIn:');
+      print('[AuthProvider.login] - token: ${SpringBootDatabaseService.token != null ? SpringBootDatabaseService.token!.substring(0, 30) + '...' : 'NULL'}');
+      print('[AuthProvider.login] - refreshToken: ${SpringBootDatabaseService.refreshToken != null ? SpringBootDatabaseService.refreshToken!.substring(0, 30) + '...' : 'NULL'}');
+      
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', SpringBootDatabaseService.token ?? '');
-      await prefs.setString('auth_refresh_token', SpringBootDatabaseService.refreshToken ?? '');
+      
+      // Only save tokens if they're not null/empty
+      if (SpringBootDatabaseService.token != null && SpringBootDatabaseService.token!.isNotEmpty) {
+        await prefs.setString('auth_token', SpringBootDatabaseService.token!);
+        print('[AuthProvider.login] ✓ Saved access token');
+      }
+      if (SpringBootDatabaseService.refreshToken != null && SpringBootDatabaseService.refreshToken!.isNotEmpty) {
+        await prefs.setString('auth_refresh_token', SpringBootDatabaseService.refreshToken!);
+        print('[AuthProvider.login] ✓ Saved refresh token');
+      } else {
+        print('[AuthProvider.login] ✗ refreshToken is null/empty after login');
+        _errorMessage = 'Lỗi: Không nhận được refresh token từ server';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+      
       await prefs.setString('auth_user_uid', _currentUser?.uid ?? '');
       await prefs.setString('auth_user_email', _currentUser?.email ?? '');
       await prefs.setString('auth_user_name', _currentUser?.name ?? '');
@@ -41,6 +66,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      print('[AuthProvider.login] ✗ Login failed: $_errorMessage');
       notifyListeners();
       return false;
     }
@@ -51,16 +77,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-    final refreshToken = prefs.getString('auth_refresh_token');
     final uid = prefs.getString('auth_user_uid');
     final email = prefs.getString('auth_user_email');
     final name = prefs.getString('auth_user_name');
     final role = prefs.getString('auth_user_role');
 
-    if (token != null && token.isNotEmpty && refreshToken != null && refreshToken.isNotEmpty && uid != null && uid.isNotEmpty && email != null && name != null && role != null) {
+    // Token already restored in main.dart via _initializeAuth()
+    // Just restore user info to provider
+    if (uid != null && email != null && name != null && role != null) {
       _currentUser = AppUser(uid: uid, email: email, name: name, role: role);
-      SpringBootDatabaseService.restoreSession(token, refreshToken, _currentUser!);
     }
 
     _isInitializing = false;

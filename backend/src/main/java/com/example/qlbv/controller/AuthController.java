@@ -51,6 +51,8 @@ public class AuthController {
 
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getUid());
             System.out.println("[AuthController.login] Refresh token created successfully");
+            System.out.println("[AuthController.login] - refreshToken.getToken(): " + (refreshToken.getToken() != null ? refreshToken.getToken().substring(0, 30) + "..." : "NULL"));
+            System.out.println("[AuthController.login] - refreshToken.getExpiryDate(): " + refreshToken.getExpiryDate());
 
             return ResponseEntity.ok(new JwtResponse(
                     jwt,
@@ -70,17 +72,47 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
+        System.out.println("[AuthController.refresh] Received refresh token request");
 
-        return refreshTokenService.findByToken(requestRefreshToken)
-                .map(refreshTokenService::verifyExpiration)
-                .map(RefreshToken::getUser)
-                .map(user -> {
-                    String token = jwtUtils.generateTokenFromUsername(user.getEmail());
-                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getUid());
-                    return ResponseEntity.<Object>ok(new TokenRefreshResponse(token, newRefreshToken.getToken()));
-                })
-                .orElseGet(() -> ResponseEntity.<Object>status(HttpStatus.FORBIDDEN)
-                        .body(new MessageResponse("Refresh token không hợp lệ!")));
+        if (requestRefreshToken == null || requestRefreshToken.isBlank()) {
+            System.out.println("[AuthController.refresh] ERROR: Refresh token is null or empty!");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token không được để trống!"));
+        }
+
+        System.out.println("[AuthController.refresh] Refresh token: " + requestRefreshToken.substring(0, Math.min(20, requestRefreshToken.length())) + "...");
+
+        try {
+            return refreshTokenService.findByToken(requestRefreshToken)
+                    .map(rt -> {
+                        System.out.println("[AuthController.refresh] Found refresh token in DB for user: " + rt.getUser().getEmail());
+                        return rt;
+                    })
+                    .map(refreshTokenService::verifyExpiration)
+                    .map(rt -> {
+                        System.out.println("[AuthController.refresh] Refresh token is valid, not expired");
+                        return rt;
+                    })
+                    .map(RefreshToken::getUser)
+                    .map(user -> {
+                        System.out.println("[AuthController.refresh] Generating new tokens for user: " + user.getEmail());
+                        String token = jwtUtils.generateTokenFromUsername(user.getEmail());
+                        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getUid());
+                        System.out.println("[AuthController.refresh] New tokens generated successfully");
+                        return ResponseEntity.<Object>ok(new TokenRefreshResponse(token, newRefreshToken.getToken()));
+                    })
+                    .orElseGet(() -> {
+                        // Token không tìm thấy trong DB (đã bị xóa hoặc không hợp lệ)
+                        System.out.println("[AuthController.refresh] ERROR: Refresh token NOT FOUND in DB: " + requestRefreshToken.substring(0, Math.min(20, requestRefreshToken.length())) + "...");
+                        return ResponseEntity.<Object>status(HttpStatus.UNAUTHORIZED)
+                                .body(new MessageResponse("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!"));
+                    });
+        } catch (TokenRefreshException ex) {
+            // Token hết hạn (verifyExpiration throw)
+            System.out.println("[AuthController.refresh] ERROR: Refresh token EXPIRED: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!"));
+        }
     }
 
     // Request & Response DTOs

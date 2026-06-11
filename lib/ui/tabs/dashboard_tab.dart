@@ -327,7 +327,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           _buildKpiChip(
             icon: Icons.scale,
             label: 'Sản lượng',
-            value: '${volume.toStringAsFixed(1)}',
+            value: volume.toStringAsFixed(1),
             bgColor: const Color(0xFFE3F2FD),
             iconColor: const Color(0xFF1565C0),
           ),
@@ -370,6 +370,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -383,7 +384,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           Text(
             value,
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w800,
               color: iconColor,
             ),
@@ -394,10 +395,12 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: iconColor.withOpacity(0.7),
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
