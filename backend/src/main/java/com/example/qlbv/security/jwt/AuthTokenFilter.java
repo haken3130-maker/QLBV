@@ -29,8 +29,29 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        String path = request.getServletPath();
+        String method = request.getMethod();
+        String authHeader = request.getHeader("Authorization");
+        
+        logger.info("=== [AuthTokenFilter] Request: {} {} ===", method, path);
+        logger.info("[AuthTokenFilter] Authorization header: {}", authHeader != null ? authHeader.substring(0, Math.min(20, authHeader.length())) + "..." : "NULL");
+        
+        if (isPublicPath(path)) {
+            logger.info("[AuthTokenFilter] PUBLIC path detected, skipping JWT validation: {}", path);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        logger.info("[AuthTokenFilter] PROTECTED path, checking JWT: {}", path);
+        
         try {
             String jwt = parseJwt(request);
+            if (jwt != null) {
+                logger.debug("JWT found in Authorization header for path {}", path);
+            } else {
+                logger.warn("[AuthTokenFilter] No JWT found for PROTECTED path: {}", path);
+            }
+
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
@@ -40,12 +61,17 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.info("[AuthTokenFilter] Authentication set for user: {}", username);
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPublicPath(String path) {
+        return path.startsWith("/api/auth/") || path.equals("/health");
     }
 
     private String parseJwt(HttpServletRequest request) {

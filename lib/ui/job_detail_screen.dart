@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/salary_provider.dart';
@@ -6,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../models/job.dart';
 import '../models/product.dart';
 import '../models/employee.dart';
+import '../utils/number_formatters.dart';
 
 class JobDetailScreen extends StatelessWidget {
   final Job job;
@@ -333,7 +335,7 @@ class JobDetailScreen extends StatelessWidget {
 
 class JobEditDialog extends StatefulWidget {
   final Job job;
-  const JobEditDialog({required this.job});
+  const JobEditDialog({super.key, required this.job});
 
   @override
   State<JobEditDialog> createState() => _JobEditDialogState();
@@ -356,7 +358,7 @@ class _JobEditDialogState extends State<JobEditDialog> {
       text: widget.job.quantity.toString(),
     );
     _priceController = TextEditingController(
-      text: widget.job.unitPrice.toString(),
+      text: formatCurrency(widget.job.unitPrice),
     );
     _selectedParticipants = List.from(widget.job.participants);
   }
@@ -370,7 +372,7 @@ class _JobEditDialogState extends State<JobEditDialog> {
 
   int get _calculatedTotal {
     final qty = double.tryParse(_quantityController.text) ?? 0.0;
-    final price = int.tryParse(_priceController.text) ?? 0;
+    final price = parseCurrencyInt(_priceController.text);
     return (qty * price).round();
   }
 
@@ -408,7 +410,7 @@ class _JobEditDialogState extends State<JobEditDialog> {
         date: _selectedDate,
         product: _selectedProduct!,
         quantity: double.parse(_quantityController.text),
-        unitPrice: int.parse(_priceController.text),
+        unitPrice: parseCurrencyInt(_priceController.text),
         participantIds: _selectedParticipants,
         updatedBy: authProv.currentUser?.email ?? 'Unknown',
       );
@@ -442,12 +444,10 @@ class _JobEditDialogState extends State<JobEditDialog> {
     final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
 
     // Pre-select current product
-    if (_selectedProduct == null) {
-      _selectedProduct = activeProducts.cast<Product?>().firstWhere(
+    _selectedProduct ??= activeProducts.cast<Product?>().firstWhere(
         (p) => p?.id == widget.job.productId,
         orElse: () => null,
       );
-    }
 
     return AlertDialog(
       title: const Text('Sửa công việc'),
@@ -475,8 +475,9 @@ class _JobEditDialogState extends State<JobEditDialog> {
                           firstDate: DateTime(2025),
                           lastDate: DateTime(2030),
                         );
-                        if (picked != null)
+                        if (picked != null) {
                           setState(() => _selectedDate = picked);
+                        }
                       },
                       icon: const Icon(Icons.calendar_month, size: 18),
                       label: const Text(
@@ -488,7 +489,7 @@ class _JobEditDialogState extends State<JobEditDialog> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<Product>(
-                  value: _selectedProduct,
+                  initialValue: _selectedProduct,
                   decoration: const InputDecoration(labelText: 'Sản phẩm'),
                   items: activeProducts
                       .map(
@@ -498,8 +499,9 @@ class _JobEditDialogState extends State<JobEditDialog> {
                   onChanged: (val) {
                     setState(() {
                       _selectedProduct = val;
-                      if (val != null)
+                      if (val != null) {
                         _priceController.text = val.defaultPrice.toString();
+                      }
                     });
                   },
                 ),
@@ -524,11 +526,15 @@ class _JobEditDialogState extends State<JobEditDialog> {
                 TextFormField(
                   controller: _priceController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    ThousandsSeparatorInputFormatter(),
+                  ],
                   decoration: const InputDecoration(labelText: 'Đơn giá (đ)'),
                   onChanged: (_) => setState(() {}),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Nhập đơn giá';
-                    if (int.tryParse(v) == null) return 'Đơn giá phải là số';
+                    if (v.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Đơn giá phải là số';
                     return null;
                   },
                 ),

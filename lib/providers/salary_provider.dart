@@ -32,9 +32,19 @@ class SalaryProvider extends ChangeNotifier {
   List<SalaryPayment> get salaryPayments => _salaryPayments;
   List<AuditLog> get auditLogs => _auditLogs;
 
-  SalaryProvider() {
-    initStreams();
-  }
+  bool _isSyncing = false;
+  bool _isSynced = false;
+  int _syncStep = 0;
+  int _syncTotal = 5;
+  String _syncMessage = 'Chuẩn bị đồng bộ dữ liệu...';
+
+  bool get isSyncing => _isSyncing;
+  bool get isSynced => _isSynced;
+  int get syncStep => _syncStep;
+  int get syncTotal => _syncTotal;
+  String get syncMessage => _syncMessage;
+
+  SalaryProvider();
 
   void initStreams() {
     _employeeSub?.cancel();
@@ -84,6 +94,67 @@ class SalaryProvider extends ChangeNotifier {
     _paymentSub?.cancel();
     _auditLogSub?.cancel();
     super.dispose();
+  }
+
+  Future<bool> syncData() async {
+    if (_isSyncing || _isSynced) return _isSynced;
+    _isSyncing = true;
+    _isSynced = false;
+    _syncStep = 0;
+    _syncMessage = 'Khởi động đồng bộ dữ liệu...';
+    notifyListeners();
+
+    try {
+      // Initialize stream subscriptions so UI updates as data arrives
+      initStreams();
+
+      // Start listening to the first event of each stream in parallel
+      final tasks = <Map<String, dynamic>>[
+        {'msg': 'Đang tải danh sách nhân viên...', 'f': _repository.streamEmployees().first},
+        {'msg': 'Đang tải danh sách sản phẩm...', 'f': _repository.streamProducts().first},
+        {'msg': 'Đang tải danh sách công việc...', 'f': _repository.streamJobs().first},
+        {'msg': 'Đang tải lương nhân viên...', 'f': _repository.streamSalaryEntries().first},
+        {'msg': 'Đang tải dữ liệu thanh toán...', 'f': _repository.streamSalaryPayments().first},
+      ];
+
+      // Ensure syncTotal reflects actual number of tasks
+      _syncTotal = tasks.length;
+      _syncStep = 0;
+      _syncMessage = 'Đang đồng bộ dữ liệu...';
+      notifyListeners();
+
+      // For each future, attach a completion handler to update progress
+      final futures = tasks.map((t) {
+        final msg = t['msg'] as String;
+        final fut = t['f'] as Future;
+        return fut.then((_) {
+          _syncStep++;
+          _syncMessage = '$_syncStep/$_syncTotal - Đã tải xong: ${msg.substring(11)}';
+          notifyListeners();
+        });
+      }).toList();
+
+      // Wait until all first events are received
+      await Future.wait(futures);
+
+      _syncMessage = 'Đồng bộ dữ liệu hoàn tất.';
+      _isSynced = true;
+      return true;
+    } catch (e) {
+      _syncMessage = 'Đồng bộ thất bại: ${e.toString()}';
+      _isSynced = false;
+      return false;
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _syncStepAsync<T>(String message, Stream<T> stream) async {
+    _syncStep++;
+    _syncMessage = message;
+    notifyListeners();
+    await stream.first;
   }
 
   // --- Actions ---
@@ -140,6 +211,19 @@ class SalaryProvider extends ChangeNotifier {
     await _repository.updateProduct(updated);
   }
 
+  Future<void> updateProduct(Product product, String newName, int newPrice) async {
+    final updated = product.copyWith(name: newName, defaultPrice: newPrice);
+    await _repository.updateProduct(updated);
+  }
+
+  Future<void> deleteProduct(String productId) async {
+    await _repository.deleteProduct(productId);
+  }
+
+  Future<void> deleteEmployee(String employeeId) async {
+    await _repository.deleteEmployee(employeeId);
+  }
+
   Future<void> createJob({
     required DateTime date,
     required Product product,
@@ -152,8 +236,9 @@ class SalaryProvider extends ChangeNotifier {
     final totalAmount = (quantity * unitPrice).round();
     final numParticipants = participantIds.length;
 
-    if (numParticipants == 0)
+    if (numParticipants == 0) {
       throw Exception('Phải chọn ít nhất 1 người tham gia.');
+    }
 
     final baseSplit = totalAmount ~/ numParticipants;
     final remainder = totalAmount % numParticipants;
@@ -212,8 +297,9 @@ class SalaryProvider extends ChangeNotifier {
   }) async {
     final totalAmount = (quantity * unitPrice).round();
     final numParticipants = participantIds.length;
-    if (numParticipants == 0)
+    if (numParticipants == 0) {
       throw Exception('Phải chọn ít nhất 1 người tham gia.');
+    }
 
     final baseSplit = totalAmount ~/ numParticipants;
     final remainder = totalAmount % numParticipants;

@@ -30,7 +30,18 @@ class _LoginScreenState extends State<LoginScreen> {
     final success = await authProv.login(_emailController.text.trim(), _passwordController.text.trim());
     
     if (success && mounted) {
-      Provider.of<SalaryProvider>(context, listen: false).initStreams();
+      final salaryProv = Provider.of<SalaryProvider>(context, listen: false);
+      final synced = await salaryProv.syncData();
+      if (!mounted) return;
+      if (!synced) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đồng bộ dữ liệu thất bại. Vui lòng thử lại.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
       );
@@ -93,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   const Center(
                     child: Text(
-                      'QUẢN LÝ LƯƠNG ĐỘI BỐC VÁC',
+                      'QUẢN LÝ LƯƠNG',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 20,

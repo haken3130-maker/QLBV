@@ -46,4 +46,14 @@ public class ProductController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteProduct(@PathVariable String id) {
+        if (!productRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        productRepository.deleteById(id);
+        return ResponseEntity.ok().build();
+    }
 }

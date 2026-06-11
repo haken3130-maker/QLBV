@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/salary_provider.dart';
@@ -7,6 +8,7 @@ import '../../models/job.dart';
 import '../../models/product.dart';
 import '../../models/employee.dart';
 import '../job_detail_screen.dart';
+import '../../utils/number_formatters.dart';
 
 class JobsTab extends StatefulWidget {
   const JobsTab({super.key});
@@ -62,7 +64,7 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _CreateJobDialog(),
+      builder: (_) => const CreateJobDialog(),
     );
   }
 
@@ -139,7 +141,7 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
                         icon: Icons.scale_outlined,
                         color: const Color(0xFF1565C0),
                         label: 'Sản lượng',
-                        value: '${statsTotalVolume.toStringAsFixed(1)}',
+                        value: statsTotalVolume.toStringAsFixed(1),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -733,14 +735,14 @@ class _JobsTabState extends State<JobsTab> with TickerProviderStateMixin {
   }
 }
 
-class _CreateJobDialog extends StatefulWidget {
-  const _CreateJobDialog();
+class CreateJobDialog extends StatefulWidget {
+  const CreateJobDialog({super.key});
 
   @override
-  State<_CreateJobDialog> createState() => _CreateJobDialogState();
+  State<CreateJobDialog> createState() => CreateJobDialogState();
 }
 
-class _CreateJobDialogState extends State<_CreateJobDialog> {
+class CreateJobDialogState extends State<CreateJobDialog> {
   final _formKey = GlobalKey<FormState>();
   DateTime _selectedDate = DateTime.now();
   Product? _selectedProduct;
@@ -748,6 +750,7 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
   final _quantityController = TextEditingController();
   final _priceController = TextEditingController();
   final List<String> _selectedParticipants = [];
+  String _employeeSearchQuery = '';
 
   bool _isSaving = false;
 
@@ -762,14 +765,14 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
     setState(() {
       _selectedProduct = prod;
       if (prod != null) {
-        _priceController.text = prod.defaultPrice.toString();
+        _priceController.text = formatCurrency(prod.defaultPrice);
       }
     });
   }
 
   int get _calculatedTotal {
     final quantity = double.tryParse(_quantityController.text) ?? 0.0;
-    final price = int.tryParse(_priceController.text) ?? 0;
+    final price = parseCurrencyInt(_priceController.text);
     return (quantity * price).round();
   }
 
@@ -818,7 +821,7 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
         date: _selectedDate,
         product: _selectedProduct!,
         quantity: double.parse(_quantityController.text),
-        unitPrice: int.parse(_priceController.text),
+        unitPrice: parseCurrencyInt(_priceController.text),
         participantIds: _selectedParticipants,
         createdBy: authProv.currentUser?.email ?? 'Unknown',
       );
@@ -938,12 +941,12 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
 
                       // Product Selector
                       const Text(
-                        'Loại sản phẩm bốc xếp',
+                        'Loại sản phẩm',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<Product>(
-                        value: _selectedProduct,
+                        initialValue: _selectedProduct,
                         decoration: InputDecoration(
                           hintText: 'Chọn sản phẩm',
                           prefixIcon: const Icon(Icons.inventory_2_outlined),
@@ -963,7 +966,7 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
 
                       // Quantity
                       const Text(
-                        'Sản lượng bốc xếp',
+                        'Sản lượng',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
@@ -988,13 +991,17 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
 
                       // Unit Price
                       const Text(
-                        'Đơn giá bốc xếp (VNĐ)',
+                        'Đơn giá (VNĐ)',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2C3E50)),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _priceController,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          ThousandsSeparatorInputFormatter(),
+                        ],
                         decoration: InputDecoration(
                           hintText: 'VD: 900000',
                           prefixIcon: const Icon(Icons.sell_outlined),
@@ -1005,7 +1012,7 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
                         onChanged: (_) => setState(() {}),
                         validator: (val) {
                           if (val == null || val.isEmpty) return 'Vui lòng nhập đơn giá';
-                          if (int.tryParse(val) == null) return 'Đơn giá phải là số nguyên';
+                          if (val.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Đơn giá phải là số nguyên';
                           return null;
                         },
                       ),
@@ -1025,7 +1032,7 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('TỔNG TIỀN BỐC XẾP', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                                const Text('TỔNG TIỀN', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
                                 Text(
                                   currencyFormat.format(_calculatedTotal),
@@ -1064,51 +1071,139 @@ class _CreateJobDialogState extends State<_CreateJobDialog> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      
-                      // Active employees checklist
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        decoration: InputDecoration(
+                          hintText: 'Tìm kiếm tên hoặc số điện thoại',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: _employeeSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded),
+                                  onPressed: () => setState(() => _employeeSearchQuery = ''),
+                                )
+                              : null,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
+                        onChanged: (value) => setState(() => _employeeSearchQuery = value.trim()),
+                      ),
+                      const SizedBox(height: 12),
+                      if (activeEmployees.isNotEmpty)
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedParticipants.clear();
+                                  _selectedParticipants.addAll(activeEmployees.map((e) => e.id));
+                                });
+                              },
+                              child: const Text('Chọn tất cả'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() => _selectedParticipants.clear());
+                              },
+                              child: const Text('Bỏ chọn'),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade200),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: activeEmployees.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: Text('Không có nhân viên hoạt động')),
-                              )
-                            : ListView.builder(
-                                shrinkWrap: true,
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: activeEmployees.length,
-                                itemBuilder: (context, idx) {
-                                  final emp = activeEmployees[idx];
-                                  final isChecked = _selectedParticipants.contains(emp.id);
-                                  
-                                  return CheckboxListTile(
-                                    title: Text(
-                                      emp.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        constraints: const BoxConstraints(
+                          minHeight: 260,
+                          maxHeight: 360,
+                        ),
+                        child: Column(
+                          children: [
+                            if (_selectedParticipants.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxHeight: 90),
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: _selectedParticipants.map((id) {
+                                        final emp = activeEmployees.firstWhere(
+                                          (e) => e.id == id,
+                                          orElse: () => Employee(id: id, name: 'Không rõ', phone: '', joinDate: DateTime.now(), status: ''),
+                                        );
+                                        final shortId = emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id;
+                                        return InputChip(
+                                          label: Text(
+                                            '${emp.name} • ${emp.phone.isNotEmpty ? emp.phone : shortId}',
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                          onDeleted: () {
+                                            setState(() => _selectedParticipants.remove(id));
+                                          },
+                                          deleteIconColor: const Color(0xFF6200EE),
+                                          backgroundColor: const Color(0xFFE8EAF6),
+                                        );
+                                      }).toList(),
                                     ),
-                                    subtitle: Text(emp.phone, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                    value: isChecked,
-                                    onChanged: (checked) {
-                                      setState(() {
-                                        if (checked == true) {
-                                          _selectedParticipants.add(emp.id);
-                                        } else {
-                                          _selectedParticipants.remove(emp.id);
-                                        }
-                                      });
-                                    },
-                                    activeColor: const Color(0xFF6200EE),
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                  );
-                                },
+                                  ),
+                                ),
                               ),
+                            Expanded(
+                              child: Builder(builder: (context) {
+                                final filteredEmployees = activeEmployees.where((emp) {
+                                  final query = _employeeSearchQuery.toLowerCase();
+                                  return emp.name.toLowerCase().contains(query) || emp.phone.contains(query);
+                                }).toList();
+
+                                return filteredEmployees.isEmpty
+                                    ? Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Center(child: Text(_employeeSearchQuery.isEmpty ? 'Không có nhân viên hoạt động' : 'Không tìm thấy nhân viên phù hợp', style: const TextStyle(color: Colors.grey))),
+                                      )
+                                    : ListView.builder(
+                                        physics: const BouncingScrollPhysics(),
+                                        itemCount: filteredEmployees.length,
+                                        itemBuilder: (context, idx) {
+                                          final emp = filteredEmployees[idx];
+                                          final isChecked = _selectedParticipants.contains(emp.id);
+
+                                          final shortId = emp.id.length > 6 ? emp.id.substring(0, 6) : emp.id;
+                                          return CheckboxListTile(
+                                            title: Text(
+                                              emp.name,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            subtitle: Text(
+                                              emp.phone.isNotEmpty
+                                                  ? 'SĐT: ${emp.phone} • Mã: $shortId'
+                                                  : 'Mã: $shortId',
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            ),
+                                            value: isChecked,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (checked == true) {
+                                                  _selectedParticipants.add(emp.id);
+                                                } else {
+                                                  _selectedParticipants.remove(emp.id);
+                                                }
+                                              });
+                                            },
+                                            activeColor: const Color(0xFF6200EE),
+                                            controlAffinity: ListTileControlAffinity.leading,
+                                            dense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                          );
+                                        },
+                                      );
+                              }),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

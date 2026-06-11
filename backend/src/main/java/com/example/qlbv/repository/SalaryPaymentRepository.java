@@ -8,4 +8,5 @@ import java.util.List;
 public interface SalaryPaymentRepository extends JpaRepository<SalaryPayment, String> {
     List<SalaryPayment> findByPaymentDateBetweenOrderByPaymentDateDesc(LocalDateTime start, LocalDateTime end);
     List<SalaryPayment> findAllByOrderByPaymentDateDesc();
+    void deleteByEmployeeId(String employeeId);
 }

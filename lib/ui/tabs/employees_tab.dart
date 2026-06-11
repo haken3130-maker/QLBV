@@ -18,13 +18,14 @@ class _EmployeesTabState extends State<EmployeesTab> {
 
   List<Employee> _filterEmployees(List<Employee> allEmployees) {
     if (_activeFilterIdx == 0) return allEmployees;
-    if (_activeFilterIdx == 1)
+    if (_activeFilterIdx == 1) {
       return allEmployees.where((e) => e.status == 'active').toList();
+    }
     return allEmployees.where((e) => e.status == 'inactive').toList();
   }
 
   void _openAddEmployeeDialog(BuildContext context) {
-    showDialog(context: context, builder: (_) => const _AddEmployeeDialog());
+    showDialog(context: context, builder: (_) => const AddEmployeeDialog());
   }
 
   void _openEditEmployeeDialog(BuildContext context, Employee emp) {
@@ -174,6 +175,16 @@ class _EmployeesTabState extends State<EmployeesTab> {
                                       onPressed: () =>
                                           _confirmToggleStatus(context, emp),
                                     ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.redAccent,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Xóa nhân viên',
+                                      onPressed: () =>
+                                          _confirmDeleteEmployee(context, emp),
+                                    ),
                                   ],
                                 )
                               : null,
@@ -276,16 +287,53 @@ class _EmployeesTabState extends State<EmployeesTab> {
       ),
     );
   }
+
+  void _confirmDeleteEmployee(BuildContext context, Employee employee) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa nhân viên'),
+        content: Text('Bạn có chắc muốn xóa nhân viên "${employee.name}" và toàn bộ dữ liệu lương liên quan không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await Provider.of<SalaryProvider>(context, listen: false)
+                    .deleteEmployee(employee.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Đã xóa nhân viên và dữ liệu lương liên quan.'), backgroundColor: Colors.green),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _AddEmployeeDialog extends StatefulWidget {
-  const _AddEmployeeDialog();
+class AddEmployeeDialog extends StatefulWidget {
+  const AddEmployeeDialog({super.key});
 
   @override
-  State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
+  State<AddEmployeeDialog> createState() => AddEmployeeDialogState();
 }
 
-class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
+class AddEmployeeDialogState extends State<AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();

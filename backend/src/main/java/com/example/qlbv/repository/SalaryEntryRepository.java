@@ -10,4 +10,5 @@ public interface SalaryEntryRepository extends JpaRepository<SalaryEntry, String
     void deleteByJobId(String jobId);
     List<SalaryEntry> findByDateBetween(LocalDateTime start, LocalDateTime end);
     List<SalaryEntry> findByEmployeeIdAndDateBetween(String employeeId, LocalDateTime start, LocalDateTime end);
+    void deleteByEmployeeId(String employeeId);
 }

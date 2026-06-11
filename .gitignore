@@ -33,8 +33,14 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# Symbolication related
-app.*.symbols
+# Backend data files (H2)
+backend/data/
+
+# Metadata
+.metadata
+
+# Firebase config (removed)
+android/app/google-services.json
 
 # Obfuscation related
 app.*.map.json

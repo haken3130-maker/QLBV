@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/salary_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/product.dart';
+import '../../utils/number_formatters.dart';
 
 class ProductsTab extends StatelessWidget {
   const ProductsTab({super.key});
@@ -19,6 +21,39 @@ class ProductsTab extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => _EditPriceDialog(product: product),
+    );
+  }
+
+  void _confirmDeleteProduct(BuildContext context, Product product) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa sản phẩm'),
+        content: Text('Bạn có chắc muốn xóa sản phẩm "${product.name}" không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await Provider.of<SalaryProvider>(context, listen: false).deleteProduct(product.id);
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Đã xóa sản phẩm.'), backgroundColor: Colors.green),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -93,7 +128,7 @@ class ProductsTab extends StatelessWidget {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                                tooltip: 'Sửa giá',
+                                tooltip: 'Sửa sản phẩm',
                                 onPressed: () => _openEditPriceDialog(context, prod),
                               ),
                               IconButton(
@@ -105,6 +140,11 @@ class ProductsTab extends StatelessWidget {
                                 onPressed: () {
                                   salaryProv.toggleProductActive(prod);
                                 },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                tooltip: 'Xóa sản phẩm',
+                                onPressed: () => _confirmDeleteProduct(context, prod),
                               ),
                             ],
                           )
@@ -157,7 +197,7 @@ class _AddProductDialogState extends State<_AddProductDialog> {
       await salaryProv.addProduct(
         _nameController.text.trim(),
         _unitController.text.trim(),
-        int.parse(_priceController.text),
+        parseCurrencyInt(_priceController.text),
       );
 
       if (mounted) {
@@ -208,10 +248,14 @@ class _AddProductDialogState extends State<_AddProductDialog> {
             TextFormField(
               controller: _priceController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                ThousandsSeparatorInputFormatter(),
+              ],
               decoration: const InputDecoration(hintText: 'VD: 900000'),
               validator: (val) {
                 if (val == null || val.isEmpty) return 'Vui lòng nhập đơn giá';
-                if (int.tryParse(val) == null) return 'Đơn giá phải là số nguyên';
+                if (parseCurrencyInt(val) == 0 && val.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Đơn giá phải là số nguyên';
                 return null;
               },
             ),
@@ -249,17 +293,20 @@ class _EditPriceDialog extends StatefulWidget {
 
 class _EditPriceDialogState extends State<_EditPriceDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _priceController.text = widget.product.defaultPrice.toString();
+    _nameController.text = widget.product.name;
+    _priceController.text = formatCurrency(widget.product.defaultPrice);
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _priceController.dispose();
     super.dispose();
   }
@@ -269,11 +316,15 @@ class _EditPriceDialogState extends State<_EditPriceDialog> {
     setState(() => _isSaving = true);
     try {
       final salaryProv = Provider.of<SalaryProvider>(context, listen: false);
-      await salaryProv.updateProductPrice(widget.product, int.parse(_priceController.text));
+      await salaryProv.updateProduct(
+        widget.product,
+        _nameController.text.trim(),
+        parseCurrencyInt(_priceController.text),
+      );
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã cập nhật đơn giá thành công!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Đã cập nhật sản phẩm thành công!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
@@ -290,22 +341,34 @@ class _EditPriceDialogState extends State<_EditPriceDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Sửa Đơn Giá: ${widget.product.name}'),
+      title: Text('Sửa sản phẩm: ${widget.product.name}'),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Đơn giá mới (đ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text('Tên sản phẩm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(hintText: 'VD: Giấy cuộn'),
+              validator: (val) => val == null || val.isEmpty ? 'Vui lòng nhập tên sản phẩm' : null,
+            ),
+            const SizedBox(height: 12),
+            Text('Đơn giá mới (đ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _priceController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                ThousandsSeparatorInputFormatter(),
+              ],
               decoration: const InputDecoration(hintText: 'VD: 950000'),
               validator: (val) {
                 if (val == null || val.isEmpty) return 'Vui lòng nhập đơn giá';
-                if (int.tryParse(val) == null) return 'Đơn giá phải là số nguyên';
+                if (parseCurrencyInt(val) == 0 && val.replaceAll(RegExp(r'[^0-9]'), '').isEmpty) return 'Đơn giá phải là số nguyên';
                 return null;
               },
             ),

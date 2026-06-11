@@ -34,33 +34,84 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        if (appUserRepository.count() == 0) {
-            seedDatabase();
-        }
+        seedDatabase();
     }
 
     private void seedDatabase() {
-        System.out.println("--- Seeding qlbv Database with Default Admin and Leader Accounts ---");
+        try {
+            System.out.println("=== [DatabaseSeeder] Starting database initialization ===");
+            
+            // 1. App Users (Operators)
+            System.out.println("[DatabaseSeeder] Creating/updating admin@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("admin_uid")
+                    .email("admin@qlbv.com")
+                    .password(passwordEncoder.encode("admin123"))
+                    .name("Quản Lý Admin")
+                    .role("admin")
+                    .build());
 
-        // 1. App Users (Operators)
-        AppUser admin = AppUser.builder()
-                .uid("admin_uid")
-                .email("admin@qlbv.com")
-                .password(passwordEncoder.encode("admin123"))
-                .name("Quản Lý Admin")
-                .role("admin")
-                .build();
+            System.out.println("[DatabaseSeeder] Creating/updating leader@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("leader_uid")
+                    .email("leader@qlbv.com")
+                    .password(passwordEncoder.encode("leader123"))
+                    .name("Tổ Trưởng Vương")
+                    .role("leader")
+                    .build());
 
-        AppUser leader = AppUser.builder()
-                .uid("leader_uid")
-                .email("leader@qlbv.com")
-                .password(passwordEncoder.encode("leader123"))
-                .name("Tổ Trưởng Vương")
-                .role("leader")
-                .build();
+            System.out.println("[DatabaseSeeder] Creating/updating thanhnhan@qlbv.com");
+            createOrUpdateUser(AppUser.builder()
+                    .uid("thanhnhan_uid")
+                    .email("thanhnhan@qlbv.com")
+                    .password(passwordEncoder.encode("thanhnhan123"))
+                    .name("Thành Nhân")
+                    .role("admin")
+                    .build());
 
-        appUserRepository.saveAll(Arrays.asList(admin, leader));
+            System.out.println("=== [DatabaseSeeder] Database initialization completed successfully ===");
+        } catch (Exception e) {
+            System.err.println("[DatabaseSeeder] ERROR during initialization: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
-        System.out.println("--- Database Initialization Completed ---");
+    private void createOrUpdateUser(AppUser user) {
+        try {
+            System.out.println("[DatabaseSeeder.createOrUpdateUser] Searching for user: " + user.getEmail());
+            
+            appUserRepository.findByEmail(user.getEmail()).ifPresentOrElse(
+                    existing -> {
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] User already exists: " + existing.getEmail() + ", ID: " + existing.getUid());
+                        boolean changed = false;
+                        if (!existing.getName().equals(user.getName())) {
+                            existing.setName(user.getName());
+                            changed = true;
+                        }
+                        if (!existing.getRole().equals(user.getRole())) {
+                            existing.setRole(user.getRole());
+                            changed = true;
+                        }
+                        if (!existing.getPassword().equals(user.getPassword())) {
+                            existing.setPassword(user.getPassword());
+                            changed = true;
+                        }
+                        if (changed) {
+                            appUserRepository.save(existing);
+                            System.out.println("[DatabaseSeeder.createOrUpdateUser] User updated: " + existing.getEmail());
+                        } else {
+                            System.out.println("[DatabaseSeeder.createOrUpdateUser] User already exists with correct data: " + existing.getEmail());
+                        }
+                    },
+                    () -> {
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] Creating new user: " + user.getEmail());
+                        AppUser saved = appUserRepository.save(user);
+                        System.out.println("[DatabaseSeeder.createOrUpdateUser] User created successfully: " + saved.getEmail() + ", ID: " + saved.getUid());
+                    }
+            );
+        } catch (Exception e) {
+            System.err.println("[DatabaseSeeder.createOrUpdateUser] ERROR creating/updating user " + user.getEmail() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

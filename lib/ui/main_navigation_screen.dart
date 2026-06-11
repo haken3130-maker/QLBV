@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/tab_notifier.dart';
 import 'auth/login_screen.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/jobs_tab.dart';
@@ -18,13 +19,29 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _selectedIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+    final tabProv = context.read<TabNotifier>();
+    tabProv.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    context.read<TabNotifier>().removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 700;
     final authProv = Provider.of<AuthProvider>(context);
+    final tabProv = Provider.of<TabNotifier>(context);
     final user = authProv.currentUser;
 
     if (user == null) {
@@ -46,9 +63,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       if (user.role == 'admin') const AuditLogTab(),
     ];
 
-    // Ensure _selectedIndex doesn't exceed valid tab range
-    if (_selectedIndex >= tabs.length) {
-      _selectedIndex = 0;
+    int selectedIndex = tabProv.index;
+    if (selectedIndex >= tabs.length) {
+      selectedIndex = 0;
     }
 
     return Scaffold(
@@ -62,29 +79,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
         actions: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.purple.shade100),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)),
             ),
             child: Text(
               user.role == 'admin' ? 'QTV' : 'Tổ trưởng',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.purple.shade700,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
-
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
             tooltip: 'Đăng xuất',
-            onPressed: () {
-              authProv.logout();
-            },
+            onPressed: () => authProv.logout(),
           ),
         ],
       ),
@@ -92,12 +106,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ? Row(
               children: [
                 NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (index) {
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                  },
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (index) => tabProv.navigateTo(index),
                   labelType: NavigationRailLabelType.all,
                   selectedLabelTextStyle: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
@@ -148,21 +158,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   ],
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
-                Expanded(
-                  child: tabs[_selectedIndex],
-                ),
+                Expanded(child: tabs[selectedIndex]),
               ],
             )
-          : tabs[_selectedIndex],
+          : tabs[selectedIndex],
       bottomNavigationBar: isTablet
           ? null
           : BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
-              },
+              currentIndex: selectedIndex,
+              onTap: (index) => tabProv.navigateTo(index),
               type: BottomNavigationBarType.fixed,
               selectedFontSize: 10,
               unselectedFontSize: 9,

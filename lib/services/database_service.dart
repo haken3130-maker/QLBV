@@ -18,11 +18,13 @@ abstract class IDatabaseService {
   Stream<List<Employee>> streamEmployees();
   Future<void> addEmployee(Employee employee);
   Future<void> updateEmployee(Employee employee);
+  Future<void> deleteEmployee(String employeeId);
 
   // Products
   Stream<List<Product>> streamProducts();
   Future<void> addProduct(Product product);
   Future<void> updateProduct(Product product);
+  Future<void> deleteProduct(String productId);
 
   // Jobs
   Stream<List<Job>> streamJobs();

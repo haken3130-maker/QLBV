@@ -1,11 +1,14 @@
 package com.example.qlbv.security;
 
+import com.example.qlbv.security.jwt.AuthAccessDeniedHandler;
 import com.example.qlbv.security.jwt.AuthEntryPointJwt;
 import com.example.qlbv.security.jwt.AuthTokenFilter;
 import com.example.qlbv.security.services.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -40,6 +43,7 @@ public class WebSecurityConfig {
     }
 
     @Bean
+    @Lazy
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
          
@@ -50,6 +54,7 @@ public class WebSecurityConfig {
     }
 
     @Bean
+    @Lazy
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
@@ -61,19 +66,39 @@ public class WebSecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        System.out.println("=== [WebSecurityConfig] Configuring security filter chain ===");
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
-            .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
+            .exceptionHandling(exception -> exception
+                .authenticationEntryPoint(unauthorizedHandler)
+                .accessDeniedHandler(accessDeniedHandler())
+            )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> 
-                auth.requestMatchers("/api/auth/**").permitAll()
-                    .anyRequest().authenticated()
-            );
+            .authorizeHttpRequests(auth -> {
+                System.out.println("[WebSecurityConfig] Setting up authorization rules:");
+                System.out.println("  - OPTIONS /** → permitAll");
+                System.out.println("  - /api/auth/** → permitAll");
+                System.out.println("  - /health → permitAll");
+                System.out.println("  - /api/admin/** → hasRole('ADMIN')");
+                System.out.println("  - anyRequest → authenticated()");
+                
+                auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/health").permitAll()
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    .anyRequest().authenticated();
+            });
         
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        System.out.println("=== [WebSecurityConfig] Security filter chain configured ===");
         
         return http.build();
+    }
+
+    @Bean
+    public AuthAccessDeniedHandler accessDeniedHandler() {
+        return new AuthAccessDeniedHandler();
     }
 
     @Bean
