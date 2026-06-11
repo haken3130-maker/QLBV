@@ -23,6 +23,9 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider() {
     // Initialize repository after this provider is created
     _repository = SalaryRepository();
+    SpringBootDatabaseService.onSessionExpired = () {
+      logout();
+    };
   }
 
   Future<bool> login(String email, String password) async {

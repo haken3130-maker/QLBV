@@ -103,6 +103,7 @@ class SpringBootDatabaseService implements IDatabaseService {
                 _token = null;
                 _refreshToken = null;
                 _cachedUser = null;
+                onSessionExpired?.call();
               }
             }
           } catch (_) {
@@ -147,6 +148,7 @@ class SpringBootDatabaseService implements IDatabaseService {
 
   static String? get token => _token;
   static String? get refreshToken => _refreshToken;
+  static VoidCallback? onSessionExpired;
 
   // StreamControllers to publish reactive updates
   final _employeeStreamController = StreamController<List<Employee>>.broadcast();
